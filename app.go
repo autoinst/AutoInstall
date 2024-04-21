@@ -2,9 +2,6 @@ package main
 
 import (
     "fmt"
-    "os"
-    "path/filepath"
-    "strings"
 ) //导入
 
 func main() {
