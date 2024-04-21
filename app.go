@@ -1,8 +1,6 @@
 package main
 
-import (
-    "fmt"
-) //导入
+import fmt //导入
 
 func main() {
     fmt.Println("[AutoInstall] 启动")
