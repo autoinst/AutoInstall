@@ -27,5 +27,9 @@ jobs:
     - name: capture build artifacts
       uses: actions/upload-artifact@v2
       with:
-        name: Dev Install
-        path: app.exe
+         repo_token: "${{ secrets.GITHUB_TOKEN }}"
+         automatic_release_tag: "latest"
+         prerelease: false
+         title: "发布版本"
+         files: |
+           ./app
