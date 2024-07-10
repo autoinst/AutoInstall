@@ -29,4 +29,4 @@ jobs:
       with:
         name: Dev Install
         path: |
-          ./app.exe
+          ./app.*
