@@ -23,3 +23,9 @@ jobs:
 
     - name: 构建
       run: go build -v ./app.go
+
+    - name: capture build artifacts
+      uses: actions/upload-artifact@v2
+      with:
+        name: Dev Install
+        path: app.exe
