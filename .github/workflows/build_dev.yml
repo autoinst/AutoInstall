@@ -1,13 +1,13 @@
 # This workflow will build a golang project
 # For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
 
-name: Release Build
+name: Dev build
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [ "dev" ]
   pull_request:
-    branches: [ "master" ]
+    branches: [ "dev" ]
 
 jobs:
 
@@ -24,12 +24,9 @@ jobs:
     - name: 构建
       run: go build -v ./app.go
 
-    - name: automatic releases
-      uses: marvinpinto/action-automatic-releases@v1.2.1
+    - name: capture build artifacts
+      uses: actions/upload-artifact@v2
       with:
-         repo_token: "${{ secrets.GITHUB_TOKEN }}"
-         automatic_release_tag: "latest"
-         prerelease: false
-         title: "TrChat 自动构建最新版本"
-         files: |
-           ./app.*
+        name: Dev Install
+        path: |
+          ./app
