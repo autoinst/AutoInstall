@@ -24,12 +24,9 @@ jobs:
     - name: 构建
       run: go build -v ./app.go
 
-    - name: automatic releases
-      uses: marvinpinto/action-automatic-releases@v1.2.1
+    - name: 发布文件
+      uses: actions/upload-artifact@v2
       with:
-         repo_token: "${{ secrets.GITHUB_TOKEN }}"
-         automatic_release_tag: "latest"
-         prerelease: false
-         title: "发布版本"
-         files: |
-           ./app
+        name: Dev Install
+        path: |
+          ./app
