@@ -15,10 +15,4 @@ func main() {
    } else {
       fmt.Printf("创建执行文件\n");
       os.MkdirAll(".authinst/aria2", os.ModePerm)
-      resp, err := http.Get(aria2)
-      if err != nil {
-          return err
-      }
-      defer resp.Body.Close()
-   }
 }
