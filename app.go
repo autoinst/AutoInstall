@@ -20,9 +20,9 @@ func main() {
    scanner.Scan()
    start := scanner.Text()
    if start = 0 {
-
+      fmt.Printf("test0\n");
 	} else if start = 1{
-
+      fmt.Printf("test1\n");
 	} else {
       fmt.Printf("?你在干啥\n");
       os.Exit(0)
