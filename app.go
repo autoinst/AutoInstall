@@ -19,8 +19,8 @@ func main() {
    fmt.Printf("1.WEB操作(1)\n");
    fmt.Printf("2.命令行启动(2)\n");
    scanner.Scan()
-   start := scanner.Text()
-   if start == 0 {
+   text := scanner.Text()
+   if text == 0 {
       fmt.Printf("test0\n");
 	} else if start == 1{
       fmt.Printf("test1\n");
