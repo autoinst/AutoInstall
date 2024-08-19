@@ -3,7 +3,6 @@ package main
 import (
     "fmt";
     "os";
-    "strconv";
     "bufio"
  )//导入
 
@@ -18,8 +17,13 @@ func main() {
    fmt.Printf("启动方式\n");
    fmt.Printf("1.WEB操作(1)\n");
    fmt.Printf("2.命令行启动(2)\n");
-   scanner.Scan()
-   text := scanner.Text()
+   reader := bufio.NewReader(os.Stdin)
+   text, err := reader.ReadString('\n')
+   if err != nil {
+      fmt.Println("读取输入时发生错误:", err)
+      return
+   }
+   text = text[:len(text)-1]
    if text == 0 {
       fmt.Printf("test0\n");
 	} else if start == 1{
