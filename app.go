@@ -24,7 +24,7 @@ func main() {
       return
    }
    text = text[:len(text)-1]
-   if text == 0 {
+   if text == "0" {
       fmt.Printf("test0\n");
 	} else if text == "1" {
       fmt.Printf("test1\n");
