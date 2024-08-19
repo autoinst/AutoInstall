@@ -26,7 +26,7 @@ func main() {
    text = text[:len(text)-1]
    if text == 0 {
       fmt.Printf("test0\n");
-	} else if start == "1"{
+	} else if text == "1" {
       fmt.Printf("test1\n");
 	} else {
       fmt.Printf("?你在干啥\n");
