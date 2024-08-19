@@ -3,7 +3,8 @@ package main
 import (
     "fmt";
     "os";
-    "bufio"
+    "bufio";
+    "strings"
  )//导入
 
 func main() {
@@ -23,10 +24,10 @@ func main() {
       fmt.Println("读取输入时发生错误:", err)
       return
    }
-   text = text[:len(text)-1]
-   if text == "0" {
+   text = strings.TrimSpace(text)
+   if text == "1" {
       fmt.Printf("test0\n");
-	} else if text == "1" {
+	} else if text == "2" {
       fmt.Printf("test1\n");
 	} else {
       fmt.Printf("?你在干啥\n");
