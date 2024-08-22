@@ -26,9 +26,10 @@ func main() {
    }
    text = strings.TrimSpace(text)
    if text == "1" {
-      fmt.Printf("test0\n");
+      fmt.Printf("帮我写Vue?\n");
 	} else if text == "2" {
-      fmt.Printf("test1\n");
+      fmt.Printf("请问您想要什么版本\n");
+      fmt.Printf("当前可用\n");
 	} else {
       fmt.Printf("?你在干啥\n");
       os.Exit(0)
