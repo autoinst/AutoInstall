@@ -27,11 +27,15 @@ func main() {
    text = strings.TrimSpace(text)
    if text == "1" {
       fmt.Printf("帮我写Vue?\n");
+      fmt.Printf("了解一下https://github.com/jdnjk/autoinst_web\n");
+      fmt.Printf("10秒后跳转到命令行\n");
+      time.Sleep(10 * time.Second)
 	} else if text == "2" {
-      fmt.Printf("请问您想要什么版本\n");
-      fmt.Printf("当前可用\n");
+      fmt.Printf("启动命令行\n");
 	} else {
       fmt.Printf("?你在干啥\n");
       os.Exit(0)
    }
+   fmt.Printf("请问您想要什么版本\n");
+   fmt.Printf("当前可用\n");
 }
