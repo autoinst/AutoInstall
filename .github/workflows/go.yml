@@ -68,7 +68,7 @@ jobs:
           check-latest: true
 
       - name: Build
-        run: go build -o ./dist/${{ build_name }} app.go
+        run: go build -o ./dist/${{ env.BUILD_NAME }} app.go
 
       - name: Get version
         id: get_version
