@@ -3,7 +3,9 @@ package main
 import (
     "fmt";
     "os";
-    "bufio"
+    "bufio";
+    "strings";
+    "time"
  )//导入
 
 func main() {
@@ -23,13 +25,18 @@ func main() {
       fmt.Println("读取输入时发生错误:", err)
       return
    }
-   text = text[:len(text)-1]
-   if text == "0" {
-      fmt.Printf("test0\n");
-	} else if text == "1" {
-      fmt.Printf("test1\n");
+   text = strings.TrimSpace(text)
+   if text == "1" {
+      fmt.Printf("帮我写Vue?\n");
+      fmt.Printf("了解一下https://github.com/jdnjk/autoinst_web\n");
+      fmt.Printf("10秒后跳转到命令行\n");
+      time.Sleep(10 * time.Second)
+	} else if text == "2" {
+      fmt.Printf("启动命令行\n");
 	} else {
       fmt.Printf("?你在干啥\n");
       os.Exit(0)
    }
+   fmt.Printf("请问您想要什么版本\n");
+   fmt.Printf("当前可用\n");
 }
