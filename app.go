@@ -4,7 +4,8 @@ import (
     "fmt";
     "os";
     "bufio";
-    "strings"
+    "strings";
+    "time"
  )//导入
 
 func main() {
