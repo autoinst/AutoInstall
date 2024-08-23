@@ -25,21 +25,14 @@ jobs:
           # Exclude i386 on darwin and dragonfly.
           - goarch: 386
             goos: dragonfly
-        include:
-          # END Linux ARM 5 6 7
-          # BEGIN Android ARM 8
-          - goos: android
-            goarch: arm64
-          # END Android ARM 8
 
     runs-on: ubuntu-latest
     env:
       GOOS: ${{ matrix.goos }}
       GOARCH: ${{ matrix.goarch }}
-      GOARM: ${{ matrix.goarm }}
       GOAMD64: ${{ matrix.goamd64 }}
       CGO_ENABLED: 0
-      BUILD_NAME: AutoInstall-${{ matrix.goos }}-${{ matrix.goarch }}-${{ matrix.goarm }}${{ matrix.goamd64 }}${{ matrix.goos == 'windows' && '.exe' || '' }}
+      BUILD_NAME: AutoInstall-${{ matrix.goos }}-${{ matrix.goarch }}-${{ matrix.goamd64 }}${{ matrix.goos == 'windows' && '.exe' || '' }}
 
     steps:
       - uses: actions/checkout@v4
