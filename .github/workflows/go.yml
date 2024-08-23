@@ -68,29 +68,14 @@ jobs:
           check-latest: true
 
       - name: Build
-        run: go build app.go
+        run: go build app.go -o ./dist
 
-      - name: Upload Build Artifact
-        uses: actions/upload-artifact@v4
+      - name: Get version
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF/refs\/tags\//}" >> $GITHUB_OUTPUT
+      - name: Release
+        uses: softprops/action-gh-release@v1
         with:
-          name: ${{ env.BUILD_NAME }}
-          path: ${{ env.BUILD_NAME }}
-
-  Publish:
-    permissions: write-all
-    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.version }}
-    needs: [ build ]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          path: bin/
-          merge-multiple: true
-
-      - name: Upload Release
-        uses: softprops/action-gh-release@v2
-        if: ${{ success() }}
-        with:
-          tag_name: ${{ github.event.inputs.version }}
-          files: bin/*
-          prerelease: true
+          files:  dist/*
+          draft: true
+          fail_on_unmatched_files: true
