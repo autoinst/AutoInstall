@@ -63,6 +63,6 @@ jobs:
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
-          files:  dist/*
+          files:  dist/
           draft: true
           fail_on_unmatched_files: true
