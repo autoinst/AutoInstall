@@ -6,27 +6,91 @@ name: Release Build
 on:
   push:
     branches: [ "master" ]
+    tags:
+      - '*.*.*'
   pull_request:
     branches: [ "master" ]
+    tags:
+      - '*.*.*'
 
 jobs:
-
   build:
+    strategy:
+      matrix:
+        # Include amd64 on all platforms.
+        goos: [ windows, linux ]
+        goarch: [ amd64, 386 ]
+        goamd64: [ v1 ]
+        exclude:
+          # Exclude i386 on darwin and dragonfly.
+          - goarch: 386
+            goos: dragonfly
+        include:
+          # BEGIN Linux ARM 5 6 7
+          - goos: linux
+            goarch: arm
+            goarm: 7
+          - goos: linux
+            goarch: arm
+            goarm: 6
+          - goos: linux
+            goarch: arm
+            goarm: 5
+          # END Linux ARM 5 6 7
+          # BEGIN Android ARM 8
+          - goos: android
+            goarch: arm64
+          # END Android ARM 8
+          # BEGIN Other architectures
+          # BEGIN riscv64 & ARM64
+          - goos: linux
+            goarch: arm64
+          - goos: freebsd
+            goarch: arm64
+          # END Other architectures
+
+    runs-on: ubuntu-latest
+    env:
+      GOOS: ${{ matrix.goos }}
+      GOARCH: ${{ matrix.goarch }}
+      GOARM: ${{ matrix.goarm }}
+      GOAMD64: ${{ matrix.goamd64 }}
+      CGO_ENABLED: 0
+      BUILD_NAME: AutoInstall-${{ matrix.goos }}-${{ matrix.goarch }}-${{ matrix.goarm }}${{ matrix.goamd64 }}${{ matrix.goos == 'windows' && '.exe' || '' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ^1.20
+          check-latest: true
+
+      - name: Build
+        run: go build app.go
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.BUILD_NAME }}
+          path: ${{ env.BUILD_NAME }}
+
+  Publish:
+    permissions: write-all
+    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.version }}
+    needs: [ build ]
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+      - uses: actions/download-artifact@v4
+        with:
+          path: bin/
+          merge-multiple: true
 
-    - name: 配置Go版本
-      uses: actions/setup-go@v4
-      with:
-        go-version: '1.22.2'
-
-    - name: 构建
-      run: go build -v ./app.go
-
-    - name: 发布文件
-      uses: actions/upload-artifact@v2
-      with:
-        name: Dev Install
-        path: |
-          ./app
+      - name: Upload Release
+        uses: softprops/action-gh-release@v2
+        if: ${{ success() }}
+        with:
+          tag_name: ${{ github.event.inputs.version }}
+          files: bin/*
+          prerelease: true
