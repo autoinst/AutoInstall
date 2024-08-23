@@ -54,7 +54,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Release
-        uses: softprops/action-gh-release@v1
+        uses: action-gh-release@v0.1.13
         with:
           files:  dist/
           draft: true
