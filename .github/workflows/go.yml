@@ -69,5 +69,5 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files:  dist/*
-          draft: true
+          draft: false
           fail_on_unmatched_files: true
