@@ -12,22 +12,31 @@ import (
  )//导入
 
 func main() {
+   //整活下载器
    now := time.Now()
-	// 只保留年、月、日
 	currentDate := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	// 设置比较的日期（4月1日）
 	targetDate := time.Date(currentDate.Year(), time.April, 1, 0, 0, 0, 0, now.Location())
-	// 比较当前日期和目标日期
 	if currentDate == targetDate {
 		fmt.Println("正在初始化瑞典原神下崽器")
 	} else {
 		fmt.Println("AutoInstall初始化ing")
 	}
    fmt.Println("查找可执行文件中")
-   if _, err := os.Stat("./.authinst"); err == nil {
+   if _, err := os.Stat("./.autoinst"); err == nil {
       fmt.Printf("200 OK\n");
    } else {
-      os.MkdirAll(".authinst", os.ModePerm)
+      os.MkdirAll(".autoinst", os.ModePerm)
+   }
+   if _, err := os.Stat("./.autoinst/cache"); err == nil {
+      err := os.Remove("./autoinst/cache")
+      if err != nil {
+        fmt.Println("删除文件时出错:", err)
+        // 可以选择在这里返回或处理错误
+        return
+      }
+      os.MkdirAll(".autoinst/cache", os.ModePerm)
+   } else {
+      os.MkdirAll(".autoinst/cache", os.ModePerm)
    }
    fmt.Printf("启动方式\n");
    fmt.Printf("1.WEB操作(1)\n");
@@ -82,5 +91,5 @@ func main() {
 	}
 
    //处理json
-   fmt.Println("处理文件:", err)
+   fmt.Println("开始处理文件")
 }
