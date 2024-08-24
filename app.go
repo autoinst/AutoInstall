@@ -6,8 +6,8 @@ import (
     "bufio";
     "strings";
     "time";
+    "io"
     "net/http";
-	 "os";
 	 "path/filepath"
  )//导入
 
