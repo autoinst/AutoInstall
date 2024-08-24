@@ -49,12 +49,12 @@ jobs:
       - name: Get version
         id: get_version
         run: echo "VERSION=${GITHUB_REF/refs\/tags\//}" >> $GITHUB_OUTPUT
-        
+
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.BUILD_NAME }}
-          path: ${{ env.BUILD_NAME }}
+          path: dist/${{ env.BUILD_NAME }}
   Publish:
     permissions: write-all
     needs: [ build ]
