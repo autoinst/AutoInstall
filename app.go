@@ -79,7 +79,7 @@ func main() {
 	// 创建要保存的文件
 	file, err := os.Create(filePath)
 	if err != nil {
-		fmt.Println("权限不足而无法创建文件:", err)
+		fmt.Println("权限不足或因屎山代码而无法创建文件:", err)
 		return
 	}
 	defer file.Close()
