@@ -7,11 +7,11 @@ on:
   push:
     branches: [ "master" ]
     tags:
-      - '*.*.*'
+      - 'v*.*.*'
   pull_request:
     branches: [ "master" ]
     tags:
-      - '*.*.*'
+      - 'v*.*.*'
 
 jobs:
   build:
@@ -25,38 +25,14 @@ jobs:
           # Exclude i386 on darwin and dragonfly.
           - goarch: 386
             goos: dragonfly
-        include:
-          # BEGIN Linux ARM 5 6 7
-          - goos: linux
-            goarch: arm
-            goarm: 7
-          - goos: linux
-            goarch: arm
-            goarm: 6
-          - goos: linux
-            goarch: arm
-            goarm: 5
-          # END Linux ARM 5 6 7
-          # BEGIN Android ARM 8
-          - goos: android
-            goarch: arm64
-          # END Android ARM 8
-          # BEGIN Other architectures
-          # BEGIN riscv64 & ARM64
-          - goos: linux
-            goarch: arm64
-          - goos: freebsd
-            goarch: arm64
-          # END Other architectures
 
     runs-on: ubuntu-latest
     env:
       GOOS: ${{ matrix.goos }}
       GOARCH: ${{ matrix.goarch }}
-      GOARM: ${{ matrix.goarm }}
       GOAMD64: ${{ matrix.goamd64 }}
       CGO_ENABLED: 0
-      BUILD_NAME: AutoInstall-${{ matrix.goos }}-${{ matrix.goarch }}-${{ matrix.goarm }}${{ matrix.goamd64 }}${{ matrix.goos == 'windows' && '.exe' || '' }}
+      BUILD_NAME: AutoInstall-${{ matrix.goos }}-${{ matrix.goarch }}-${{ matrix.goamd64 }}${{ matrix.goos == 'windows' && '.exe' || '' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -68,29 +44,30 @@ jobs:
           check-latest: true
 
       - name: Build
-        run: go build app.go
+        run: go build -o dist/${{ env.BUILD_NAME }} app.go && ls dist
+
+      - name: Get version
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF/refs\/tags\//}" >> $GITHUB_OUTPUT
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.BUILD_NAME }}
-          path: ${{ env.BUILD_NAME }}
-
+          path: dist/${{ env.BUILD_NAME }}
   Publish:
     permissions: write-all
-    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.version }}
     needs: [ build ]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
         with:
-          path: bin/
+          path: dist/
           merge-multiple: true
 
-      - name: Upload Release
+      - name: Release
         uses: softprops/action-gh-release@v2
-        if: ${{ success() }}
         with:
-          tag_name: ${{ github.event.inputs.version }}
-          files: bin/*
-          prerelease: true
+          files:  dist/*
+          draft: false
+          fail_on_unmatched_files: true
