@@ -20,7 +20,6 @@ func main() {
 	} else {
 		fmt.Println("AutoInstall初始化ing")
 	}
-}
    fmt.Println("查找可执行文件中")
    if _, err := os.Stat("./.authinst"); err == nil {
       fmt.Printf("200 OK\n");
