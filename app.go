@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"./version/forge"
 ) //导入
 func handler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "正在扫描环境")
@@ -134,6 +136,5 @@ func main() {
 		return
 	}
 
-	//处理json
-	fmt.Println("开始处理文件")
+	forge.PublicFunction()
 }
