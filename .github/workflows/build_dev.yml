@@ -22,7 +22,7 @@ jobs:
         go-version: '1.22.2'
 
     - name: 构建
-      run: go build -v ./app.go
+      run: go build -v ./app.go version/forge.go
 
     - name: capture build artifacts
       uses: actions/upload-artifact@v2
