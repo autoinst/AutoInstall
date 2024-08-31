@@ -29,56 +29,56 @@ func main() {
 		fmt.Printf("200 OK\n")
 	} else {
 		os.MkdirAll(".autoinst", os.ModePerm)
-	}
-	if _, err := os.Stat("./.autoinst/cache"); err == nil {
-		err := os.Remove("./autoinst/cache")
-		if err != nil {
-			fmt.Println("删除文件时出错:", err)
-			// 可以选择在这里返回或处理错误
-			return
-		}
-		os.MkdirAll(".autoinst/cache", os.ModePerm)
-	} else {
-		os.MkdirAll(".autoinst/cache", os.ModePerm)
-	}
-	//检测是否为simpfun
-	_, err := os.Stat("./.autoinst/simpfun")
-	if err == nil {
-		log.Printf("OK")
-	} else {
-		port := os.Getenv("SERVER_PORT")
-		if port == "" {
-			log.Fatal("6")
-			// 设置HTTP服务器
-			http.HandleFunc("/", handler)
-			server := &http.Server{Addr: ":" + port}
-			// 启动服务器
-			go func() {
-				log.Println("服务器启动测试")
-				if err := server.ListenAndServe(); err != http.ErrServerClosed {
-					log.Fatalf("监听出现一些错误: %v", err)
-				}
-			}()
-			// 给服务器一点时间来启动
-			time.Sleep(1 * time.Second)
-			// 构建请求
-			url := "http://play.simpfun.cn:" + port
-			_, err = http.Get(url)
-			if err != nil {
-				log.Printf("验证失败: %v", err)
-			} else {
-				log.Println("你正在简幻欢的服务器上使用AutoInstall,将使用预设")
-				//记录
-				file, err := os.Create("./.autoinst/simpfun")
+		//检测是否为simpfun
+		_, err := os.Stat("./.autoinst/simpfun")
+		if err == nil {
+			log.Printf("OK")
+		} else {
+			port := os.Getenv("SERVER_PORT")
+			if port == "" {
+				log.Fatal("6")
+				// 设置HTTP服务器
+				http.HandleFunc("/", handler)
+				server := &http.Server{Addr: ":" + port}
+				// 启动服务器
+				go func() {
+					log.Println("服务器启动测试")
+					if err := server.ListenAndServe(); err != http.ErrServerClosed {
+						log.Fatalf("监听出现一些错误: %v", err)
+					}
+				}()
+				// 给服务器一点时间来启动
+				time.Sleep(1 * time.Second)
+				// 构建请求
+				url := "http://play.simpfun.cn:" + port
+				_, err = http.Get(url)
 				if err != nil {
-					log.Fatalf("无法创建文件: %v", err)
+					log.Printf("验证失败: %v", err)
+				} else {
+					log.Println("你正在简幻欢的服务器上使用AutoInstall,将使用预设")
+					//记录
+					file, err := os.Create("./.autoinst/simpfun")
+					if err != nil {
+						log.Fatalf("无法创建文件: %v", err)
+					}
+					defer file.Close()
 				}
-				defer file.Close()
+				if err := server.Shutdown(nil); err != nil {
+					log.Fatalf("强制关闭测试服务器: %v", err)
+				}
+				log.Println("测试服务器已关闭")
 			}
-			if err := server.Shutdown(nil); err != nil {
-				log.Fatalf("强制关闭测试服务器: %v", err)
+		}
+		if _, err := os.Stat("./.autoinst/cache"); err == nil {
+			err := os.Remove("./autoinst/cache")
+			if err != nil {
+				fmt.Println("删除文件时出错:", err)
+				// 可以选择在这里返回或处理错误
+				return
 			}
-			log.Println("测试服务器已关闭")
+			os.MkdirAll(".autoinst/cache", os.ModePerm)
+		} else {
+			os.MkdirAll(".autoinst/cache", os.ModePerm)
 		}
 
 		//开始安装
