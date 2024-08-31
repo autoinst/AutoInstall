@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"./version/forge"
+	"./forge"
 ) //导入
 func handler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "正在扫描环境")

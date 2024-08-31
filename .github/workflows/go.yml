@@ -44,7 +44,7 @@ jobs:
           check-latest: true
 
       - name: Build
-        run: go build -o dist/${{ env.BUILD_NAME }} app.go version/forge.go && ls dist
+        run: go build -o dist/${{ env.BUILD_NAME }} app.go forge.go && ls dist
 
       - name: Get version
         id: get_version
