@@ -1,15 +1,20 @@
 package main
 
 import (
-    "fmt";
-    "os";
-    "bufio";
-    "strings";
-    "time";
-    "io"
-    "net/http";
-	 "path/filepath"
- )//导入
+	"bufio"
+	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"os"
+   "strconv"
+	"path/filepath"
+	"strings"
+	"time"
+) //导入
+func handler(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, "正在扫描环境")
+}// 测试是否为简幻欢服务器
 
 func main() {
    //整活下载器
@@ -19,9 +24,8 @@ func main() {
 	if currentDate == targetDate {
 		fmt.Println("正在初始化瑞典原神下崽器")
 	} else {
-		fmt.Println("AutoInstall初始化ing")
+		fmt.Println("AutoInstall初始化")
 	}
-   fmt.Println("查找可执行文件中")
    if _, err := os.Stat("./.autoinst"); err == nil {
       fmt.Printf("200 OK\n");
    } else {
@@ -38,6 +42,47 @@ func main() {
    } else {
       os.MkdirAll(".autoinst/cache", os.ModePerm)
    }
+   //检测是否为simpfun
+   _, err := os.Stat("./.autoinst/simpfun")
+   if err == nil {
+		log.Printf("OK")
+	} else 
+   port := os.Getenv("SERVER_PORT")
+	if port == "" {
+		log.Fatal("6")
+	// 设置HTTP服务器
+	http.HandleFunc("/", handler)
+	server := &http.Server{Addr: ":" + port}
+	// 启动服务器
+	go func() {
+		log.Println("服务器启动测试")
+		if err := server.ListenAndServe(); err != http.ErrServerClosed {
+			log.Fatalf("监听出现一些错误: %v", err)
+		}
+	}()
+	// 给服务器一点时间来启动
+	time.Sleep(1 * time.Second)
+	// 构建请求
+	url := "http://play.simpfun.cn:" + port
+	_, err = http.Get(url)
+	if err != nil {
+		log.Printf("验证失败: %v", err)
+	} else {
+		log.Println("你正在简幻欢的服务器上使用AutoInstall,将使用预设")
+      //记录
+      file, err := os.Create("./.autoinst/simpfun")
+	   if err != nil {
+		log.Fatalf("无法创建文件: %v", err)
+	   }
+	   defer file.Close()
+	}
+   if err := server.Shutdown(nil); err != nil {
+      log.Fatalf("强制关闭测试服务器: %v", err)
+   }
+   log.Println("测试服务器已关闭")
+}
+
+   //开始安装
    fmt.Printf("启动方式\n");
    fmt.Printf("1.WEB操作(1)\n");
    fmt.Printf("2.命令行启动(2)\n");
