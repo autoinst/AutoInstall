@@ -43,11 +43,11 @@ func main() {
       os.MkdirAll(".autoinst/cache", os.ModePerm)
    }
    //检测是否为simpfun
-   _, err := os.Stat("./.autoinst/simpfun")
-   if err == nil {
+    _, err := os.Stat("./.autoinst/simpfun")
+    if err == nil {
 		log.Printf("OK")
-	} else 
-   port := os.Getenv("SERVER_PORT")
+	} else {
+    port := os.Getenv("SERVER_PORT")
 	if port == "" {
 		log.Fatal("6")
 	// 设置HTTP服务器
@@ -80,7 +80,6 @@ func main() {
       log.Fatalf("强制关闭测试服务器: %v", err)
    }
    log.Println("测试服务器已关闭")
-}
 
    //开始安装
    fmt.Printf("启动方式\n");
