@@ -135,6 +135,5 @@ func main() {
 		fmt.Println("无法写入:", err)
 		return
 	}
-
 	forge.PublicFunction()
 }
