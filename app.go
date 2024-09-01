@@ -10,8 +10,6 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-
-	"./forge"
 ) //导入
 func handler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "正在扫描环境")
@@ -135,5 +133,4 @@ func main() {
 		fmt.Println("无法写入:", err)
 		return
 	}
-	forge.PublicFunction()
 }
