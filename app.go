@@ -15,6 +15,36 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "正在扫描环境")
 } // 测试是否为简幻欢服务器
 
+// 重置已有日志
+func renameFileToDateTime(oldFilePath string) (newFilePath string, err error) {
+	// 获取当前日期
+	date := time.Now().Format("2006-01-02")
+
+	// 构建新的文件名
+	newFileName := date + ".txt"
+	newFilePath = filepath.Join(filepath.Dir(oldFilePath), newFileName)
+
+	// 检查文件是否存在，如果存在，则添加递增的数字
+	counter := 1
+	for {
+		if _, err := os.Stat(newFilePath); os.IsNotExist(err) {
+			break // 文件不存在，可以重命名
+		}
+		// 文件存在，添加数字后缀
+		newFileName = fmt.Sprintf("%s_%d.txt", date, counter)
+		newFilePath = filepath.Join(filepath.Dir(oldFilePath), newFileName)
+		counter++
+	}
+
+	// 重命名文件
+	err = os.Rename(oldFilePath, newFilePath)
+	if err != nil {
+		return "", err
+	}
+
+	return newFilePath, nil
+}
+
 func main() {
 	//整活下载器
 	now := time.Now()
@@ -70,17 +100,24 @@ func main() {
 		}
 	}
 	if _, err := os.Stat("./.autoinst/cache"); err == nil {
-		err := os.Remove("./autoinst/cache")
-		if err != nil {
-			fmt.Println("删除文件时出错:", err)
-			// 可以选择在这里返回或处理错误
-			return
-		}
-		os.MkdirAll(".autoinst/cache", os.ModePerm)
+		log.Println("已有缓存文件")
 	} else {
 		os.MkdirAll(".autoinst/cache", os.ModePerm)
 	}
-
+	if _, err := os.Stat("./.autoinst/logs"); err == nil {
+		if _, err := os.Stat("./.autoinst/logs/laster.txt"); err == nil {
+			oldFilePath := "path/to/oldfilename.txt"
+			// 调用函数重命名文件
+			newFilePath, err := renameFileToDateTime(oldFilePath)
+			if err != nil {
+				fmt.Println("无法重置日志:", err)
+				return
+			}
+			fmt.Println("日志重置完成:", newFilePath)
+		} else {
+			os.MkdirAll(".autoinst/logs", os.ModePerm)
+		}
+	}
 	//开始安装
 	fmt.Printf("启动方式\n")
 	fmt.Printf("1.WEB操作(1)\n")
