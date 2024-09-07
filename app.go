@@ -21,7 +21,7 @@ func renameFileToDateTime(oldFilePath string) (newFilePath string, err error) {
 	date := time.Now().Format("2006-01-02")
 
 	// 构建新的文件名
-	newFileName := date + ".txt"
+	newFileName := "Autoinst-" + date + ".txt"
 	newFilePath = filepath.Join(filepath.Dir(oldFilePath), newFileName)
 
 	// 检查文件是否存在，如果存在，则添加递增的数字
@@ -46,7 +46,7 @@ func renameFileToDateTime(oldFilePath string) (newFilePath string, err error) {
 }
 
 func main() {
-	logFilePath := "./autoinst/logs/laster.txt"
+	logFilePath := "./.autoinst/logs/laster.txt"
 
 	//整活下载器
 	now := time.Now()
@@ -112,15 +112,14 @@ func main() {
 				return
 			}
 			fmt.Println("日志重置完成:", newFilePath)
-		} else {
-			os.MkdirAll(".autoinst/logs", os.ModePerm)
 		}
+		os.MkdirAll(".autoinst/logs", os.ModePerm)
 	}
 	logFile, err := os.Create(logFilePath)
 	if err != nil {
 		log.Fatalf("无法创建日志文件: %v", err)
+		os.MkdirAll(".autoinst/logs", os.ModePerm)
 	}
-	defer logFile.Close()
 
 	// 设置日志输出到文件
 	log.SetOutput(logFile)
