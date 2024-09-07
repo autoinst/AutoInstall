@@ -130,9 +130,9 @@ func main() {
 		os.MkdirAll(".autoinst/cache", os.ModePerm)
 	}
 	//开始安装
-	log.Printf("启动方式\n")
-	log.Printf("1.WEB操作(1)\n")
-	log.Printf("2.命令行启动(2)\n")
+	fmt.Printf("启动方式\n")
+	fmt.Printf("1.WEB操作(1)\n")
+	fmt.Printf("2.命令行启动(2)\n")
 	reader := bufio.NewReader(os.Stdin)
 	text, err := reader.ReadString('\n')
 	if err != nil {
@@ -141,14 +141,14 @@ func main() {
 	}
 	text = strings.TrimSpace(text)
 	if text == "1" {
-		log.Printf("帮我写Vue?\n")
-		log.Printf("了解一下https://github.com/jdnjk/autoinst_web\n")
-		log.Printf("10秒后跳转到命令行\n")
+		fmt.Printf("帮我写Vue?\n")
+		fmt.Printf("了解一下https://github.com/jdnjk/autoinst_web\n")
+		fmt.Printf("10秒后跳转到命令行\n")
 		time.Sleep(10 * time.Second)
 	} else if text == "2" {
-		log.Printf("启动命令行\n")
+		fmt.Printf("启动命令行\n")
 	} else {
-		log.Printf("?你在干啥\n")
+		fmt.Printf("?你在干啥\n")
 		os.Exit(0)
 	}
 	dir := "./.autoinst/cache"
@@ -178,7 +178,7 @@ func main() {
 	// 将下载的内容写入文件
 	_, err = io.Copy(file, resp.Body)
 	if err != nil {
-		log.Println("无法写入:", err)
+		fmt.Printf("无法写入:", err)
 		return
 	}
 }
