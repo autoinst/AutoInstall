@@ -31,7 +31,7 @@ func renameFileToDateTime(oldFilePath string) (newFilePath string, err error) {
 			break // 文件不存在，可以重命名
 		}
 		// 文件存在，添加数字后缀
-		newFileName = fmt.Sprintf("%s_%d.txt", date, counter)
+		newFileName = fmt.Sprintf("Autoinst-%s_%d.txt", date, counter)
 		newFilePath = filepath.Join(filepath.Dir(oldFilePath), newFileName)
 		counter++
 	}
@@ -46,17 +46,19 @@ func renameFileToDateTime(oldFilePath string) (newFilePath string, err error) {
 }
 
 func main() {
+	logFilePath := "./autoinst/logs/laster.txt"
+
 	//整活下载器
 	now := time.Now()
 	currentDate := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	targetDate := time.Date(currentDate.Year(), time.April, 1, 0, 0, 0, 0, now.Location())
 	if currentDate == targetDate {
-		fmt.Println("正在初始化瑞典原神下崽器")
+		log.Println("正在初始化瑞典原神下崽器")
 	} else {
-		fmt.Println("AutoInstall初始化")
+		log.Println("AutoInstall初始化")
 	}
 	if _, err := os.Stat("./.autoinst"); err == nil {
-		fmt.Printf("200 OK\n")
+		fmt.Println("OK")
 	} else {
 		os.MkdirAll(".autoinst", os.ModePerm)
 		//检测是否为simpfun
@@ -99,14 +101,10 @@ func main() {
 			}
 		}
 	}
-	if _, err := os.Stat("./.autoinst/cache"); err == nil {
-		log.Println("已有缓存文件")
-	} else {
-		os.MkdirAll(".autoinst/cache", os.ModePerm)
-	}
+
 	if _, err := os.Stat("./.autoinst/logs"); err == nil {
 		if _, err := os.Stat("./.autoinst/logs/laster.txt"); err == nil {
-			oldFilePath := "path/to/oldfilename.txt"
+			oldFilePath := "./.autoinst/logs/laster.txt"
 			// 调用函数重命名文件
 			newFilePath, err := renameFileToDateTime(oldFilePath)
 			if err != nil {
@@ -118,10 +116,24 @@ func main() {
 			os.MkdirAll(".autoinst/logs", os.ModePerm)
 		}
 	}
+	logFile, err := os.Create(logFilePath)
+	if err != nil {
+		log.Fatalf("无法创建日志文件: %v", err)
+	}
+	defer logFile.Close()
+
+	// 设置日志输出到文件
+	log.SetOutput(logFile)
+
+	if _, err := os.Stat("./.autoinst/cache"); err == nil {
+		log.Println("已有缓存文件")
+	} else {
+		os.MkdirAll(".autoinst/cache", os.ModePerm)
+	}
 	//开始安装
-	fmt.Printf("启动方式\n")
-	fmt.Printf("1.WEB操作(1)\n")
-	fmt.Printf("2.命令行启动(2)\n")
+	log.Printf("启动方式\n")
+	log.Printf("1.WEB操作(1)\n")
+	log.Printf("2.命令行启动(2)\n")
 	reader := bufio.NewReader(os.Stdin)
 	text, err := reader.ReadString('\n')
 	if err != nil {
@@ -130,14 +142,14 @@ func main() {
 	}
 	text = strings.TrimSpace(text)
 	if text == "1" {
-		fmt.Printf("帮我写Vue?\n")
-		fmt.Printf("了解一下https://github.com/jdnjk/autoinst_web\n")
-		fmt.Printf("10秒后跳转到命令行\n")
+		log.Printf("帮我写Vue?\n")
+		log.Printf("了解一下https://github.com/jdnjk/autoinst_web\n")
+		log.Printf("10秒后跳转到命令行\n")
 		time.Sleep(10 * time.Second)
 	} else if text == "2" {
-		fmt.Printf("启动命令行\n")
+		log.Printf("启动命令行\n")
 	} else {
-		fmt.Printf("?你在干啥\n")
+		log.Printf("?你在干啥\n")
 		os.Exit(0)
 	}
 	dir := "./.autoinst/cache"
@@ -148,26 +160,26 @@ func main() {
 	fmt.Println("获取mc版本")
 	resp, err := http.Get("http://launchermeta.mojang.com/mc/game/version_manifest_v2.json")
 	if err != nil {
-		fmt.Println("无法下载文件,Mojang服务器发力了:", err)
+		log.Println("无法下载文件,Mojang服务器发力了:", err)
 		return
 	}
 	defer resp.Body.Close()
 	// 检查服务器响应状态码
 	if resp.StatusCode != http.StatusOK {
-		fmt.Println("无法下载文件，当前状态码为:", resp.StatusCode)
+		log.Println("无法下载文件，当前状态码为:", resp.StatusCode)
 		return
 	}
 	// 创建要保存的文件
 	file, err := os.Create(filePath)
 	if err != nil {
-		fmt.Println("权限不足或因屎山代码而无法创建文件:", err)
+		log.Println("权限不足或因屎山代码而无法创建文件:", err)
 		return
 	}
 	defer file.Close()
 	// 将下载的内容写入文件
 	_, err = io.Copy(file, resp.Body)
 	if err != nil {
-		fmt.Println("无法写入:", err)
+		log.Println("无法写入:", err)
 		return
 	}
 }
