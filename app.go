@@ -66,10 +66,6 @@ func main() {
 		os.MkdirAll("./.autoinst/logs", os.ModePerm)
 	}
 	logFile, err := os.Create(logFilePath)
-	if err != nil {
-		log.Fatalf("无法创建日志文件: %v", err)
-		os.MkdirAll("./.autoinst/logs", os.ModePerm)
-	}
 
 	// 设置日志输出到文件
 	multiWriter := io.MultiWriter(os.Stdout, logFile)

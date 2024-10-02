@@ -3,4 +3,5 @@ dist/*
 .vscode
 app.*
 app
-.authinst/*
+.autoinst/*
+.autoinst
