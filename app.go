@@ -63,16 +63,13 @@ func main() {
 			}
 			fmt.Println("日志重置完成:", newFilePath)
 		}
-		os.MkdirAll(".autoinst/logs", os.ModePerm)
+		os.MkdirAll("./.autoinst/logs", os.ModePerm)
 	}
 	logFile, err := os.Create(logFilePath)
-	if err != nil {
-		log.Fatalf("无法创建日志文件: %v", err)
-		os.MkdirAll(".autoinst/logs", os.ModePerm)
-	}
 
 	// 设置日志输出到文件
-	log.SetOutput(logFile)
+	multiWriter := io.MultiWriter(os.Stdout, logFile)
+	log.SetOutput(multiWriter)
 
 	if _, err := os.Stat("./.autoinst/cache"); err == nil {
 		log.Println("已有缓存文件")
@@ -80,9 +77,9 @@ func main() {
 		os.MkdirAll(".autoinst/cache", os.ModePerm)
 	}
 	//开始安装
-	fmt.Printf("启动方式\n")
-	fmt.Printf("1.WEB操作(1)\n")
-	fmt.Printf("2.命令行启动(2)\n")
+	log.Printf("启动方式\n")
+	log.Printf("1.WEB操作(1)\n")
+	log.Printf("2.命令行启动(2)\n")
 	reader := bufio.NewReader(os.Stdin)
 	text, err := reader.ReadString('\n')
 	if err != nil {
