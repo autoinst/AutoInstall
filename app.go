@@ -63,7 +63,8 @@ func main() {
 			}
 			fmt.Println("日志重置完成:", newFilePath)
 		}
-		os.MkdirAll("./.autoinst/logs", os.ModePerm)
+	} else {
+		os.MkdirAll(".autoinst/logs", os.ModePerm)
 	}
 	logFile, err := os.Create(logFilePath)
 
