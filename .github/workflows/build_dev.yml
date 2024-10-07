@@ -1,7 +1,7 @@
 # This workflow will build a golang project
 # For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
 
-name: Dev build
+name: Dev Build
 
 on:
   push:
@@ -10,23 +10,44 @@ on:
     branches: [ "dev" ]
 
 jobs:
-
   build:
+    strategy:
+      matrix:
+        # Include amd64 on all platforms.
+        goos: [ windows, linux ]
+        goarch: [ amd64, 386 ]
+        goamd64: [ v1 ]
+        exclude:
+          # Exclude i386 on darwin and dragonfly.
+          - goarch: 386
+            goos: dragonfly
+
     runs-on: ubuntu-latest
+    env:
+      GOOS: ${{ matrix.goos }}
+      GOARCH: ${{ matrix.goarch }}
+      GOAMD64: ${{ matrix.goamd64 }}
+      CGO_ENABLED: 0
+      BUILD_NAME: AutoInstall-${{ matrix.goos }}-${{ matrix.goarch }}-${{ matrix.goamd64 }}${{ matrix.goos == 'windows' && '.exe' || '' }}
+
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: 配置Go版本
-      uses: actions/setup-go@v4
-      with:
-        go-version: '1.22.2'
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ^1.20
+          check-latest: true
 
-    - name: 构建
-      run: go build -v ./app.go
+      - name: Build
+        run: go build -o dist/${{ env.BUILD_NAME }} app.go && ls dist
 
-    - name: capture build artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: Dev Install
-        path: |
-          ./app
+      - name: Get version
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF/refs\/tags\//}" >> $GITHUB_OUTPUT
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.BUILD_NAME }}
+          path: dist/${{ env.BUILD_NAME }}

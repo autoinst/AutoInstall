@@ -3,5 +3,4 @@ dist/*
 .vscode
 app.*
 app
-.autoinst/*
 .autoinst
