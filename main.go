@@ -94,7 +94,7 @@ func main() {
 		time.Sleep(10 * time.Second)
 	} else if text == "2" {
 		log.Printf("启动命令行\n")
-		cmd.InitBase()
+		//cmd.InitBase()
 	} else {
 		log.Printf("?你在干啥\n")
 		os.Exit(0)
