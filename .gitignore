@@ -3,5 +3,5 @@ dist/*
 .vscode
 app.*
 app
-.autoinst/*
-.autoinst
+.autoinst/logs
+.autoinst/cache
