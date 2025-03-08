@@ -51,19 +51,3 @@ jobs:
         with:
           name: ${{ env.BUILD_NAME }}
           path: dist/${{ env.BUILD_NAME }}
-  Publish:
-    permissions: write-all
-    needs: [ build ]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          path: dist/
-          merge-multiple: true
-
-      - name: Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files:  dist/*
-          draft: false
-          fail_on_unmatched_files: true
