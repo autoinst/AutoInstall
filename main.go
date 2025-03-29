@@ -38,10 +38,18 @@ type VersionInfo struct {
 	Libraries []Library `json:"libraries"`
 }
 
-// 下载 Minecraft server JAR 文件
-func downloadServerJar(version, librariesDir string) error {
+func downloadServerJar(version, loader, librariesDir string) error {
 	downloadURL := fmt.Sprintf("https://bmclapi2.bangbang93.com/version/%s/server", version)
-	serverPath := filepath.Join(librariesDir, "net", "minecraft", "server", version, fmt.Sprintf("server-%s.jar", version))
+	var serverFileName string
+
+	// 如果是 Forge，使用 bundled 版本
+	if loader == "forge" {
+		serverFileName = fmt.Sprintf("server-%s-bundled.jar", version)
+	} else {
+		serverFileName = fmt.Sprintf("server-%s.jar", version)
+	}
+
+	serverPath := filepath.Join(librariesDir, "net", "minecraft", "server", version, serverFileName)
 
 	if err := os.MkdirAll(filepath.Dir(serverPath), os.ModePerm); err != nil {
 		return fmt.Errorf("无法创建目录: %v", err)
@@ -268,7 +276,7 @@ func main() {
 				return
 			}
 
-			if err := downloadServerJar(config.Version, librariesDir); err != nil {
+			if err := downloadServerJar(config.Version, config.Loader, librariesDir); err != nil {
 				log.Println("下载mc服务端失败:", err)
 				return
 			}
@@ -304,7 +312,7 @@ func main() {
 				return
 			}
 
-			if err := downloadServerJar(config.Version, librariesDir); err != nil {
+			if err := downloadServerJar(config.Version, config.Loader, librariesDir); err != nil {
 				log.Println("下载mc服务端失败:", err)
 				return
 			}
