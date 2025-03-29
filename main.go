@@ -38,44 +38,23 @@ type VersionInfo struct {
 	Libraries []Library `json:"libraries"`
 }
 
+// 下载 Minecraft server JAR 文件
 func downloadServerJar(version, librariesDir string) error {
 	downloadURL := fmt.Sprintf("https://bmclapi2.bangbang93.com/version/%s/server", version)
-
-	client := &http.Client{
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			return http.ErrUseLastResponse
-		},
-	}
-
-	// 发送请求获取最终下载URL
-	resp, err := client.Get(downloadURL)
-	if err != nil {
-		return fmt.Errorf("无法获取下载URL: %v", err)
-	}
-	defer resp.Body.Close()
-
-	// 检查状态码
-	if resp.StatusCode != http.StatusFound {
-		return fmt.Errorf("意外的HTTP状态码: %d", resp.StatusCode)
-	}
-	finalURL := resp.Header.Get("Location")
-	if finalURL == "" {
-		return fmt.Errorf("未找到重定向URL")
-	}
 	serverPath := filepath.Join(librariesDir, "net", "minecraft", "server", version, fmt.Sprintf("server-%s.jar", version))
-	if err := os.MkdirAll(filepath.Dir(serverPath), os.ModePerm); err != nil {
+	filePath := filepath.Join(librariesDir, serverPath)
+	if err := os.MkdirAll(filepath.Dir(filePath), os.ModePerm); err != nil {
 		return fmt.Errorf("无法创建目录: %v", err)
 	}
-	if err := downloadFile(finalURL, serverPath); err != nil {
-		return fmt.Errorf("无法下载JAR: %v", err)
+	if err := downloadFile(downloadURL, filePath); err != nil {
+		return fmt.Errorf("无法下载服务端文件 %s: %v", err)
 	}
 
-	fmt.Println("下载完成JAR:", serverPath)
+	fmt.Println("下载完成Minecraft服务端")
 	return nil
 }
 
 func runInstaller(installerPath string) error {
-	// 创建一个命令来运行 JAR 文件
 	cmd := exec.Command("java", "-jar", installerPath)
 
 	stdout, err := cmd.StdoutPipe()
