@@ -1,6 +1,7 @@
 package main
 
 import (
+	"archive/zip"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -21,6 +22,22 @@ type InstConfig struct {
 	Download      string `json:"download"`
 }
 
+// Library 定义库的结构
+type Library struct {
+	Name      string `json:"name"`
+	Downloads struct {
+		Artifact struct {
+			URL  string `json:"url"`
+			Path string `json:"path"`
+		} `json:"artifact"`
+	} `json:"downloads"`
+}
+
+// VersionInfo 定义 version.json 文件的结构
+type VersionInfo struct {
+	Libraries []Library `json:"libraries"`
+}
+
 // 下载文件的函数
 func downloadFile(url, filePath string) error {
 	resp, err := http.Get(url)
@@ -38,6 +55,61 @@ func downloadFile(url, filePath string) error {
 	_, err = io.Copy(file, resp.Body)
 	if err != nil {
 		return fmt.Errorf("无法写入文件: %v", err)
+	}
+
+	return nil
+}
+
+// 从 JAR 文件中提取 version.json
+func extractVersionJson(jarFilePath string) (VersionInfo, error) {
+	var versionInfo VersionInfo
+	r, err := zip.OpenReader(jarFilePath)
+	if err != nil {
+		return versionInfo, fmt.Errorf("无法打开 JAR 文件: %v", err)
+	}
+	defer r.Close()
+
+	for _, f := range r.File {
+		if f.Name == "version.json" {
+			rc, err := f.Open()
+			if err != nil {
+				return versionInfo, fmt.Errorf("无法打开 version.json 文件: %v", err)
+			}
+			defer rc.Close()
+
+			if err := json.NewDecoder(rc).Decode(&versionInfo); err != nil {
+				return versionInfo, fmt.Errorf("无法解析 version.json: %v", err)
+			}
+
+			return versionInfo, nil
+		}
+	}
+
+	return versionInfo, fmt.Errorf("没有找到 version.json 文件")
+}
+
+// 替换 URL 并下载库
+func downloadLibraries(versionInfo VersionInfo, librariesDir string) error {
+	if err := os.MkdirAll(librariesDir, os.ModePerm); err != nil {
+		return fmt.Errorf("无法创建目录: %v", err)
+	}
+
+	for _, lib := range versionInfo.Libraries {
+		url := lib.Downloads.Artifact.URL
+
+		// 替换 URL
+		url = strings.Replace(url, "https://maven.neoforged.net/releases/", "https://bmclapi2.bangbang93.com/maven/", 1)
+		url = strings.Replace(url, "https://libraries.minecraft.net/", "https://bmclapi2.bangbang93.com/maven/", 1)
+
+		filePath := filepath.Join(librariesDir, lib.Downloads.Artifact.Path)
+		if err := os.MkdirAll(filepath.Dir(filePath), os.ModePerm); err != nil {
+			return fmt.Errorf("无法创建目录: %v", err)
+		}
+
+		if err := downloadFile(url, filePath); err != nil {
+			return fmt.Errorf("无法下载库文件 %s: %v", lib.Name, err)
+		}
+		fmt.Println("下载完成:", filePath)
 	}
 
 	return nil
@@ -96,7 +168,7 @@ func main() {
 		}
 		fmt.Println("找到 Java 运行环境:", javaPath)
 		if simpfun {
-			fmt.Println("使用备用 Java 位置，已启用simpfun特调")
+			fmt.Println("已启用 simpfun 特调")
 		}
 
 		if config.Loader == "neoforge" && config.Download == "bmclapi" {
@@ -108,9 +180,25 @@ func main() {
 			fmt.Println("检测到 neoforge 加载器，正在从 BMCLAPI 下载:", installerURL)
 			if err := downloadFile(installerURL, installerPath); err != nil {
 				log.Println("下载 neoforge 失败:", err)
-			} else {
-				fmt.Println("neoforge 安装器下载完成:", installerPath)
+				return
 			}
+			fmt.Println("neoforge 安装器下载完成:", installerPath)
+
+			// 提取 version.json
+			versionInfo, err := extractVersionJson(installerPath)
+			if err != nil {
+				log.Println("提取 version.json 失败:", err)
+				return
+			}
+
+			// 下载库文件
+			librariesDir := "./libraries"
+			if err := downloadLibraries(versionInfo, librariesDir); err != nil {
+				log.Println("下载库文件失败:", err)
+				return
+			}
+
+			fmt.Println("所有库文件下载完成")
 		}
 	} else if os.IsNotExist(err) {
 		log.Println("inst.json 文件不存在")
