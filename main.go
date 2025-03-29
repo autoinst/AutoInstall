@@ -54,27 +54,27 @@ func downloadServerJar(version, librariesDir string) error {
 	return nil
 }
 
-func runInstaller(installerPath string) error {
-	cmd := exec.Command("java", "-jar", installerPath)
-
+func runInstaller(installerPath string, loader string) error {
+	var cmd *exec.Cmd
+	if strings.Contains(installerPath, "forge") {
+		cmd = exec.Command("java", "-jar", installerPath, "--installServer")
+	} else {
+		cmd = exec.Command("java", "-jar", installerPath)
+	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return fmt.Errorf("无法获取标准输出: %v", err)
 	}
-
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
 		return fmt.Errorf("无法获取标准错误: %v", err)
 	}
-
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("启动命令失败: %v", err)
 	}
-
 	go func() {
 		io.Copy(os.Stdout, stdout)
 	}()
-
 	go func() {
 		io.Copy(os.Stderr, stderr)
 	}()
@@ -82,7 +82,6 @@ func runInstaller(installerPath string) error {
 	if err := cmd.Wait(); err != nil {
 		return fmt.Errorf("命令执行失败: %v", err)
 	}
-
 	return nil
 }
 
@@ -275,7 +274,7 @@ func main() {
 			}
 
 			fmt.Println("库文件下载完成")
-			if err := runInstaller(installerPath); err != nil {
+			if err := runInstaller(installerPath, config.Loader); err != nil {
 				log.Println("运行安装器失败:", err)
 			}
 		}
@@ -311,7 +310,7 @@ func main() {
 			}
 
 			fmt.Println("库文件下载完成")
-			if err := runInstaller(installerPath); err != nil {
+			if err := runInstaller(installerPath, config.Loader); err != nil {
 				log.Println("运行安装器失败:", err)
 			}
 		}
