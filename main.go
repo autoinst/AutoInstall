@@ -132,8 +132,23 @@ func extractVersionJson(jarFilePath string) (VersionInfo, error) {
 			return versionInfo, nil
 		}
 	}
+	for _, f := range r.File {
+		if f.Name == "install_profile.json" {
+			rc, err := f.Open()
+			if err != nil {
+				return versionInfo, fmt.Errorf("无法打开 install_profile.json 文件: %v", err)
+			}
+			defer rc.Close()
 
-	return versionInfo, fmt.Errorf("没有找到 version.json 文件")
+			if err := json.NewDecoder(rc).Decode(&versionInfo); err != nil {
+				return versionInfo, fmt.Errorf("无法解析 install_profile.json: %v", err)
+			}
+
+			return versionInfo, nil
+		}
+	}
+
+	return versionInfo, fmt.Errorf("没有找到文件")
 }
 
 // 替换 URL 并下载库
