@@ -162,6 +162,7 @@ func downloadLibraries(versionInfo VersionInfo, librariesDir string) error {
 
 		// 替换 URL
 		url = strings.Replace(url, "https://files.minecraftforge.net/maven/", "https://bmclapi2.bangbang93.com/maven/", 1)
+		url = strings.Replace(url, "https://mavan.minecraftforge.net/", "https://bmclapi2.bangbang93.com/maven/", 1)
 		url = strings.Replace(url, "https://maven.fabricmc.net/", "https://bmclapi2.bangbang93.com/maven/", 1)
 		url = strings.Replace(url, "https://maven.neoforged.net/releases/", "https://bmclapi2.bangbang93.com/maven/", 1)
 		url = strings.Replace(url, "https://libraries.minecraft.net/", "https://bmclapi2.bangbang93.com/maven/", 1)
