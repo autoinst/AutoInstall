@@ -278,7 +278,7 @@ func main() {
 				"https://bmclapi2.bangbang93.com/maven/net/minecraftforge/forge/%s-%s/forge-%s-%s-installer.jar",
 				config.Version, config.LoaderVersion, config.Version, config.LoaderVersion,
 			)
-			installerPath := filepath.Join("./.autoinst/cache", fmt.Sprintf("forge-%s-installer.jar", config.LoaderVersion))
+			installerPath := filepath.Join("./.autoinst/cache", fmt.Sprintf("forge-%s-%s-installer.jar", config.Version, config.LoaderVersion))
 			fmt.Println("检测到 forge 加载器，正在从 BMCLAPI 下载:", installerURL)
 			if err := downloadFile(installerURL, installerPath); err != nil {
 				log.Println("下载 forge 失败:", err)
