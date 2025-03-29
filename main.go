@@ -38,6 +38,40 @@ type VersionInfo struct {
 	Libraries []Library `json:"libraries"`
 }
 
+// 运行 JAR 文件并打印日志
+func runInstaller(installerPath string) error {
+	// 创建一个命令来运行 JAR 文件
+	cmd := exec.Command("java", "-jar", installerPath)
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return fmt.Errorf("无法获取标准输出: %v", err)
+	}
+
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return fmt.Errorf("无法获取标准错误: %v", err)
+	}
+
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("启动命令失败: %v", err)
+	}
+
+	go func() {
+		io.Copy(os.Stdout, stdout)
+	}()
+
+	go func() {
+		io.Copy(os.Stderr, stderr)
+	}()
+
+	if err := cmd.Wait(); err != nil {
+		return fmt.Errorf("命令执行失败: %v", err)
+	}
+
+	return nil
+}
+
 // 下载文件的函数
 func downloadFile(url, filePath string) error {
 	resp, err := http.Get(url)
@@ -141,6 +175,7 @@ func findJava() (string, bool) {
 }
 
 func main() {
+	os.MkdirAll(".autoinst/cache", os.ModePerm)
 	instFile := "inst.json"
 	var config InstConfig
 	if _, err := os.Stat(instFile); err == nil {
@@ -198,7 +233,10 @@ func main() {
 				return
 			}
 
-			fmt.Println("所有库文件下载完成")
+			fmt.Println("库文件下载完成")
+			if err := runInstaller(installerPath); err != nil {
+				log.Println("运行安装器失败:", err)
+			}
 		}
 	} else if os.IsNotExist(err) {
 		log.Println("inst.json 文件不存在")
