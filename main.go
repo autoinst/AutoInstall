@@ -38,7 +38,42 @@ type VersionInfo struct {
 	Libraries []Library `json:"libraries"`
 }
 
-// 运行 JAR 文件并打印日志
+func downloadServerJar(version, librariesDir string) error {
+	downloadURL := fmt.Sprintf("https://bmclapi2.bangbang93.com/version/%s/server", version)
+
+	client := &http.Client{
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+
+	// 发送请求获取最终下载URL
+	resp, err := client.Get(downloadURL)
+	if err != nil {
+		return fmt.Errorf("无法获取下载URL: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// 检查状态码
+	if resp.StatusCode != http.StatusFound {
+		return fmt.Errorf("意外的HTTP状态码: %d", resp.StatusCode)
+	}
+	finalURL := resp.Header.Get("Location")
+	if finalURL == "" {
+		return fmt.Errorf("未找到重定向URL")
+	}
+	serverPath := filepath.Join(librariesDir, "net", "minecraft", "server", version, fmt.Sprintf("server-%s.jar", version))
+	if err := os.MkdirAll(filepath.Dir(serverPath), os.ModePerm); err != nil {
+		return fmt.Errorf("无法创建目录: %v", err)
+	}
+	if err := downloadFile(finalURL, serverPath); err != nil {
+		return fmt.Errorf("无法下载JAR: %v", err)
+	}
+
+	fmt.Println("下载完成JAR:", serverPath)
+	return nil
+}
+
 func runInstaller(installerPath string) error {
 	// 创建一个命令来运行 JAR 文件
 	cmd := exec.Command("java", "-jar", installerPath)
@@ -226,10 +261,14 @@ func main() {
 				return
 			}
 
-			// 下载库文件
 			librariesDir := "./libraries"
 			if err := downloadLibraries(versionInfo, librariesDir); err != nil {
 				log.Println("下载库文件失败:", err)
+				return
+			}
+
+			if err := downloadServerJar(config.Version, librariesDir); err != nil {
+				log.Println("下载mc服务端失败:", err)
 				return
 			}
 
