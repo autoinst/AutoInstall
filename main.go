@@ -42,15 +42,15 @@ type VersionInfo struct {
 func downloadServerJar(version, librariesDir string) error {
 	downloadURL := fmt.Sprintf("https://bmclapi2.bangbang93.com/version/%s/server", version)
 	serverPath := filepath.Join(librariesDir, "net", "minecraft", "server", version, fmt.Sprintf("server-%s.jar", version))
-	filePath := filepath.Join(librariesDir, serverPath)
-	if err := os.MkdirAll(filepath.Dir(filePath), os.ModePerm); err != nil {
+
+	if err := os.MkdirAll(filepath.Dir(serverPath), os.ModePerm); err != nil {
 		return fmt.Errorf("无法创建目录: %v", err)
 	}
-	if err := downloadFile(downloadURL, filePath); err != nil {
-		return fmt.Errorf("无法下载服务端文件 %s: %v", err)
-	}
 
-	fmt.Println("下载完成Minecraft服务端")
+	if err := downloadFile(downloadURL, serverPath); err != nil {
+		return fmt.Errorf("无法下载服务端文件 %s: %v", serverPath, err)
+	}
+	fmt.Println("下载完成 Minecraft 服务端:", serverPath)
 	return nil
 }
 
