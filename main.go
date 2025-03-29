@@ -161,6 +161,8 @@ func downloadLibraries(versionInfo VersionInfo, librariesDir string) error {
 		url := lib.Downloads.Artifact.URL
 
 		// 替换 URL
+		url = strings.Replace(url, "https://files.minecraftforge.net/maven/", "https://bmclapi2.bangbang93.com/maven/", 1)
+		url = strings.Replace(url, "https://maven.fabricmc.net/", "https://bmclapi2.bangbang93.com/maven/", 1)
 		url = strings.Replace(url, "https://maven.neoforged.net/releases/", "https://bmclapi2.bangbang93.com/maven/", 1)
 		url = strings.Replace(url, "https://libraries.minecraft.net/", "https://bmclapi2.bangbang93.com/maven/", 1)
 
@@ -247,6 +249,42 @@ func main() {
 				return
 			}
 			fmt.Println("neoforge 安装器下载完成:", installerPath)
+
+			// 提取 version.json
+			versionInfo, err := extractVersionJson(installerPath)
+			if err != nil {
+				log.Println("提取 version.json 失败:", err)
+				return
+			}
+
+			librariesDir := "./libraries"
+			if err := downloadLibraries(versionInfo, librariesDir); err != nil {
+				log.Println("下载库文件失败:", err)
+				return
+			}
+
+			if err := downloadServerJar(config.Version, librariesDir); err != nil {
+				log.Println("下载mc服务端失败:", err)
+				return
+			}
+
+			fmt.Println("库文件下载完成")
+			if err := runInstaller(installerPath); err != nil {
+				log.Println("运行安装器失败:", err)
+			}
+		}
+		if config.Loader == "forge" && config.Download == "bmclapi" {
+			installerURL := fmt.Sprintf(
+				"https://bmclapi2.bangbang93.com/maven/net/minecraftforge/forge/%s-%s/forge-%s-%s-installer.jar",
+				config.Version, config.LoaderVersion, config.Version, config.LoaderVersion,
+			)
+			installerPath := filepath.Join("./.autoinst/cache", fmt.Sprintf("forge-%s-installer.jar", config.LoaderVersion))
+			fmt.Println("检测到 forge 加载器，正在从 BMCLAPI 下载:", installerURL)
+			if err := downloadFile(installerURL, installerPath); err != nil {
+				log.Println("下载 forge 失败:", err)
+				return
+			}
+			fmt.Println("forge 安装器下载完成:", installerPath)
 
 			// 提取 version.json
 			versionInfo, err := extractVersionJson(installerPath)
