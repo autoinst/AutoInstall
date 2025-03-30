@@ -381,7 +381,7 @@ func main() {
 			}
 
 			fmt.Println("库文件下载完成")
-			if err := runInstaller(installerPath, config.Loader, config.LoaderVersion, config.Version); err != nil {
+			if err := runInstaller(installerPath, config.Loader, config.Version, config.LoaderVersion); err != nil {
 				log.Println("运行安装器失败:", err)
 			}
 		}
@@ -417,7 +417,7 @@ func main() {
 			}
 
 			fmt.Println("库文件下载完成")
-			if err := runInstaller(installerPath, config.Loader, config.LoaderVersion, config.Version); err != nil {
+			if err := runInstaller(installerPath, config.Loader, config.Version, config.LoaderVersion); err != nil {
 				log.Println("运行安装器失败:", err)
 			} else {
 				// 检测是否存在 forge-版本-加载器版本-universal.jar
@@ -459,7 +459,7 @@ func main() {
 				return
 			}
 			fmt.Println("服务端下载完成")
-			if err := runInstaller(installerPath, config.Loader, config.LoaderVersion, config.LoaderVersion); err != nil {
+			if err := runInstaller(installerPath, config.Loader, config.Version, config.LoaderVersion); err != nil {
 				log.Println("运行安装器失败:", err)
 				return
 			}
