@@ -275,6 +275,13 @@ func downloadLibraries(versionInfo VersionInfo, librariesDir string, maxConnecti
 }
 
 func findJava() (string, bool) {
+	if runtime.GOOS == "linux" {
+		simpfun := "/usr/bin/jdk/jdk1.8.0_361/bin/java"
+		if _, err := os.Stat(simpfun); err == nil {
+			return simpfun, true
+		}
+	}
+
 	javaHome := os.Getenv("JAVA_HOME")
 	if javaHome != "" {
 		javaPath := filepath.Join(javaHome, "bin", "java")
@@ -287,13 +294,6 @@ func findJava() (string, bool) {
 	output, err := cmd.CombinedOutput()
 	if err == nil && strings.Contains(string(output), "version") {
 		return "java", false
-	}
-
-	if runtime.GOOS == "linux" {
-		fallbackPath := "/usr/bin/jdk/jdk1.8.0_361/bin/java"
-		if _, err := os.Stat(fallbackPath); err == nil {
-			return fallbackPath, true
-		}
 	}
 
 	return "", false
