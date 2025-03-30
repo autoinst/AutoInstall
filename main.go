@@ -102,24 +102,25 @@ func runInstaller(installerPath string, loader string) error {
 	return nil
 }
 
+// 下载文件的函数
 func downloadFile(url, filePath string) error {
-	if err := os.MkdirAll(filepath.Dir(filePath), os.ModePerm); err != nil {
-		return fmt.Errorf("无法创建目录 %s: %v", filepath.Dir(filePath), err)
-	}
 	resp, err := http.Get(url)
 	if err != nil {
 		return fmt.Errorf("无法下载文件: %v", err)
 	}
 	defer resp.Body.Close()
+
 	file, err := os.Create(filePath)
 	if err != nil {
 		return fmt.Errorf("无法创建文件: %v", err)
 	}
 	defer file.Close()
+
 	_, err = io.Copy(file, resp.Body)
 	if err != nil {
 		return fmt.Errorf("无法写入文件: %v", err)
 	}
+
 	return nil
 }
 
@@ -197,7 +198,16 @@ func downloadLibraries(versionInfo VersionInfo, librariesDir string, maxConnecti
 			continue
 		}
 
-		url := strings.Replace(lib.Downloads.Artifact.URL, "https://maven.minecraftforge.net/", "https://bmclapi2.bangbang93.com/maven/", 1)
+		url := lib.Downloads.Artifact.URL
+		url = strings.Replace(url, "https://maven.minecraftforge.net/", "https://bmclapi2.bangbang93.com/maven/", 1)
+		url = strings.Replace(url, "https://maven.fabricmc.net/", "https://bmclapi2.bangbang93.com/maven/", 1)
+		url = strings.Replace(url, "https://maven.neoforged.net/releases/", "https://bmclapi2.bangbang93.com/maven/", 1)
+		url = strings.Replace(url, "https://libraries.minecraft.net/", "https://bmclapi2.bangbang93.com/maven/", 1)
+
+		if url == "" {
+			fmt.Printf("警告: 处理后 URL 仍为空，跳过库 %s\n", lib.Name)
+			continue
+		}
 		filePath := filepath.Join(librariesDir, lib.Downloads.Artifact.Path)
 
 		wg.Add(1)
@@ -215,6 +225,9 @@ func downloadLibraries(versionInfo VersionInfo, librariesDir string, maxConnecti
 					fmt.Printf("文件 %s 校验失败 (或无法校验)，重新下载...\n", filePath)
 					os.Remove(filePath)
 				}
+			}
+			if err := os.MkdirAll(filepath.Dir(filePath), os.ModePerm); err != nil {
+				fmt.Printf("无法创建目录: %v\n", err)
 			}
 			fmt.Println("正在下载:", url)
 			if err := downloadFile(url, filePath); err != nil {
