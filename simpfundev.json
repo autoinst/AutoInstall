@@ -53,9 +53,8 @@
             },
             {
                 "type": "string",
-                "name": "并发数",
-                "notice": "同时下载线程数",
-                "exp": "\"maxconnections\": \"(.+)\""
+                "name": "最大线程数",
+                "exp": "\"maxconnections\": ([0-9]+)"
             }
         ]
     }

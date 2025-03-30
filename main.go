@@ -102,25 +102,24 @@ func runInstaller(installerPath string, loader string) error {
 	return nil
 }
 
-// 下载文件的函数
 func downloadFile(url, filePath string) error {
+	if err := os.MkdirAll(filepath.Dir(filePath), os.ModePerm); err != nil {
+		return fmt.Errorf("无法创建目录 %s: %v", filepath.Dir(filePath), err)
+	}
 	resp, err := http.Get(url)
 	if err != nil {
 		return fmt.Errorf("无法下载文件: %v", err)
 	}
 	defer resp.Body.Close()
-
 	file, err := os.Create(filePath)
 	if err != nil {
 		return fmt.Errorf("无法创建文件: %v", err)
 	}
 	defer file.Close()
-
 	_, err = io.Copy(file, resp.Body)
 	if err != nil {
 		return fmt.Errorf("无法写入文件: %v", err)
 	}
-
 	return nil
 }
 
