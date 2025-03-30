@@ -1,20 +1,20 @@
 [
     {
-        "file": "/server.properties",
-        "name": "服务端基础配置",
-        "notice": "MC服务端基础配置，重启生效",
+        "file": "/inst.json",
+        "name": "安装器配置",
+        "notice": "安装器基本配置，删除run.sh重启将重新安装",
         "exps": [
             {
                 "type": "string",
                 "name": "服务器版本",
-                "notice": "修改服务器的显示名称",
-                "exp": "\"version\": \"(.+)\","
+                "notice": "预计的服务器版本",
+                "exp": "\"version\": \"(.+)\""
             },
             {
                 "type": "select",
                 "name": "加载器",
-                "notice": "选择玩家的游戏模式",
-                "exp": "\"loader\": \"(forge|fabric|neoforge)\",",
+                "notice": "选择需要的加载器",
+                "exp": "\"loader\": \"(forge|fabric|neoforge)\"",
                 "options": [
                     {
                         "label": "Forge",
@@ -33,8 +33,8 @@
             {
                 "type": "string",
                 "name": "加载器版本",
-                "notice": "修改服务器的显示名称",
-                "exp": "\"loaderVersion\": \"(.+)\","
+                "notice": "修改加载器版本",
+                "exp": "\"loaderVersion\": \"(.+)\""
             },
             {
                 "type": "select",
@@ -50,6 +50,12 @@
                         "value": "none"
                     }
                 ]
+            },
+            {
+                "type": "string",
+                "name": "并发数",
+                "notice": "同时下载线程数",
+                "exp": "\"maxconnections\": \"(.+)\""
             }
         ]
     }

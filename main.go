@@ -47,27 +47,6 @@ type VersionInfo struct {
 	Libraries []Library `json:"libraries"`
 }
 
-func loadConfig(configPath string) Config {
-	file, err := os.Open(configPath)
-	if err != nil {
-		fmt.Println("警告: 无法打开配置文件，使用默认设置:", err)
-		return Config{MaxConnections: 8} // 默认最大并发数 8
-	}
-	defer file.Close()
-
-	var config Config
-	if err := json.NewDecoder(file).Decode(&config); err != nil {
-		fmt.Println("警告: 配置文件解析失败，使用默认设置:", err)
-		return Config{MaxConnections: 8}
-	}
-
-	if config.MaxConnections <= 0 {
-		fmt.Println("警告: maxconnections 设定无效，使用默认值 8")
-		config.MaxConnections = 8
-	}
-	return config
-}
-
 func downloadServerJar(version, loader, librariesDir string) error {
 	downloadURL := fmt.Sprintf("https://bmclapi2.bangbang93.com/version/%s/server", version)
 	var serverFileName string
