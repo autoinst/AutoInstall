@@ -76,12 +76,20 @@ func downloadServerJar(version, loader, librariesDir string) error {
 			return fmt.Errorf("无法创建符号链接 %s -> %s: %v", symlinkPath, serverPath, err)
 		}
 		fmt.Println("符号链接已创建:", symlinkPath, "->", serverPath)
+
 		// 1.17+
 		additionalSymlinkPath := filepath.Join(librariesDir, "net", "minecraft", "server", version, fmt.Sprintf("server-%s.jar", version))
 		if err := os.Symlink(serverPath, additionalSymlinkPath); err != nil {
 			return fmt.Errorf("无法创建符号链接 %s -> %s: %v", additionalSymlinkPath, serverPath, err)
 		}
 		fmt.Println("符号链接已创建:", additionalSymlinkPath, "->", serverPath)
+	} else if loader == "fabric" {
+		// Fabric
+		symlinkPath := "./server.jar"
+		if err := os.Symlink(serverPath, symlinkPath); err != nil {
+			return fmt.Errorf("无法创建符号链接 %s -> %s: %v", symlinkPath, serverPath, err)
+		}
+		fmt.Println("符号链接已创建:", symlinkPath, "->", serverPath)
 	}
 	return nil
 }
@@ -423,6 +431,27 @@ func main() {
 				} else {
 					fmt.Printf("未找到文件 %s，跳过创建运行脚本。\n", universalJar)
 				}
+			}
+		}
+		if config.Loader == "fabric" && config.Download == "bmclapi" {
+			installerURL := fmt.Sprintf(
+				"https://bmclapi2.bangbang93.com/maven/net/fabricmc/fabric-installer/1.0.1/fabric-installer-1.0.1.jar",
+			)
+			installerPath := filepath.Join("./.autoinst/cache", fmt.Sprintf("fabric-installer-1.0.1"))
+			fmt.Println("检测到 fabric 加载器，仅从BMCLAPI下载原版服务端:", installerURL)
+			if err := downloadFile(installerURL, installerPath); err != nil {
+				log.Println("下载 fabric 失败:", err)
+				return
+			}
+			fmt.Println("fabric 安装器下载完成:", installerPath)
+			librariesDir := "./libraries"
+			if err := downloadServerJar(config.Version, config.Loader, librariesDir); err != nil {
+				log.Println("下载mc服务端失败:", err)
+				return
+			}
+			fmt.Println("服务端下载完成")
+			if err := runInstaller(installerPath, config.Loader); err != nil {
+				log.Println("运行安装器失败:", err)
 			}
 		}
 	} else if os.IsNotExist(err) {
