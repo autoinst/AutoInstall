@@ -2,5 +2,6 @@
     "version": "1.21.1",
     "loader": "neoforge",
     "loaderVersion": "1.0.0",
-    "download": "bmclapi"
+    "download": "bmclapi",
+    "maxconnections": 10
 }

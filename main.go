@@ -2,6 +2,7 @@ package main
 
 import (
 	"archive/zip"
+	"crypto/sha1"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,14 +13,21 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 )
 
 // InstConfig 结构体表示 inst.json 的内容
 type InstConfig struct {
-	Version       string `json:"version"`
-	Loader        string `json:"loader"`
-	LoaderVersion string `json:"loaderVersion"`
-	Download      string `json:"download"`
+	Version        string `json:"version"`
+	Loader         string `json:"loader"`
+	LoaderVersion  string `json:"loaderVersion"`
+	Download       string `json:"download"`
+	MaxConnections int    `json:"maxconnections"`
+}
+
+// Config 定义配置文件的结构
+type Config struct {
+	MaxConnections int `json:"maxconnections"`
 }
 
 // Library 定义库的结构
@@ -29,6 +37,7 @@ type Library struct {
 		Artifact struct {
 			URL  string `json:"url"`
 			Path string `json:"path"`
+			SHA1 string `json:"sha1"`
 		} `json:"artifact"`
 	} `json:"downloads"`
 }
@@ -36,6 +45,27 @@ type Library struct {
 // VersionInfo 定义 version.json 文件的结构
 type VersionInfo struct {
 	Libraries []Library `json:"libraries"`
+}
+
+func loadConfig(configPath string) Config {
+	file, err := os.Open(configPath)
+	if err != nil {
+		fmt.Println("警告: 无法打开配置文件，使用默认设置:", err)
+		return Config{MaxConnections: 8} // 默认最大并发数 8
+	}
+	defer file.Close()
+
+	var config Config
+	if err := json.NewDecoder(file).Decode(&config); err != nil {
+		fmt.Println("警告: 配置文件解析失败，使用默认设置:", err)
+		return Config{MaxConnections: 8}
+	}
+
+	if config.MaxConnections <= 0 {
+		fmt.Println("警告: maxconnections 设定无效，使用默认值 8")
+		config.MaxConnections = 8
+	}
+	return config
 }
 
 func downloadServerJar(version, loader, librariesDir string) error {
@@ -128,14 +158,14 @@ func extractVersionJson(jarFilePath string) (VersionInfo, error) {
 		if f.Name == "version.json" {
 			rc, err := f.Open()
 			if err != nil {
-				return versionInfo, fmt.Errorf("无法打开 version.json 文件: %v", err)
+				log.Printf("警告: 无法打开 version.json 文件: %v", err)
+				continue
 			}
 			defer rc.Close()
-
 			if err := json.NewDecoder(rc).Decode(&versionInfo); err != nil {
-				return versionInfo, fmt.Errorf("无法解析 version.json: %v", err)
+				log.Printf("警告: 无法解析 version.json: %v", err)
+				continue
 			}
-
 			return versionInfo, nil
 		}
 	}
@@ -158,38 +188,66 @@ func extractVersionJson(jarFilePath string) (VersionInfo, error) {
 	return versionInfo, fmt.Errorf("没有找到文件")
 }
 
-func downloadLibraries(versionInfo VersionInfo, librariesDir string) error {
+// 计算文件的 SHA1 哈希值
+func computeSHA1(filePath string) (string, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	hasher := sha1.New()
+	if _, err := io.Copy(hasher, file); err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf("%x", hasher.Sum(nil)), nil
+}
+
+// 下载库文件（支持 SHA1 校验）
+func downloadLibraries(versionInfo VersionInfo, librariesDir string, maxConnections int) error {
 	if err := os.MkdirAll(librariesDir, os.ModePerm); err != nil {
 		return fmt.Errorf("无法创建目录: %v", err)
 	}
+
+	sem := make(chan struct{}, maxConnections) // 控制并发数
+	var wg sync.WaitGroup
 
 	for _, lib := range versionInfo.Libraries {
 		if lib.Downloads.Artifact.URL == "" {
 			fmt.Printf("跳过库文件 %s: 未提供下载 URL\n", lib.Name)
 			continue
 		}
-		url := lib.Downloads.Artifact.URL
-		url = strings.Replace(url, "https://maven.minecraftforge.net/", "https://bmclapi2.bangbang93.com/maven/", 1)
-		url = strings.Replace(url, "https://maven.fabricmc.net/", "https://bmclapi2.bangbang93.com/maven/", 1)
-		url = strings.Replace(url, "https://maven.neoforged.net/releases/", "https://bmclapi2.bangbang93.com/maven/", 1)
-		url = strings.Replace(url, "https://libraries.minecraft.net/", "https://bmclapi2.bangbang93.com/maven/", 1)
 
-		if url == "" {
-			fmt.Printf("警告: 处理后 URL 仍为空，跳过库 %s\n", lib.Name)
-			continue
-		}
+		url := strings.Replace(lib.Downloads.Artifact.URL, "https://maven.minecraftforge.net/", "https://bmclapi2.bangbang93.com/maven/", 1)
 		filePath := filepath.Join(librariesDir, lib.Downloads.Artifact.Path)
-		if err := os.MkdirAll(filepath.Dir(filePath), os.ModePerm); err != nil {
-			fmt.Printf("无法创建目录: %v\n", err)
-			continue
-		}
-		fmt.Println("正在下载:", url)
-		if err := downloadFile(url, filePath); err != nil {
-			fmt.Printf("下载失败 %s (%s): %v\n", lib.Name, url, err)
-			continue
-		}
-		fmt.Println("下载完成:", filePath)
+
+		wg.Add(1)
+		go func(lib Library, url, filePath string) {
+			defer wg.Done()
+			sem <- struct{}{} // 获取令牌
+			// 校验 SHA1
+			if _, err := os.Stat(filePath); err == nil {
+				fileSHA1, err := computeSHA1(filePath)
+				if err == nil && fileSHA1 == lib.Downloads.Artifact.SHA1 {
+					fmt.Printf("已存在且校验通过: %s\n", filePath)
+					<-sem // 释放令牌
+					return
+				} else {
+					fmt.Printf("文件 %s 校验失败 (或无法校验)，重新下载...\n", filePath)
+					os.Remove(filePath)
+				}
+			}
+			fmt.Println("正在下载:", url)
+			if err := downloadFile(url, filePath); err != nil {
+				fmt.Printf("下载失败 %s (%s): %v\n", lib.Name, url, err)
+			} else {
+				fmt.Println("下载完成:", filePath)
+			}
+			<-sem // 释放令牌
+		}(lib, url, filePath)
 	}
+	wg.Wait()
 	return nil
 }
 
@@ -271,7 +329,7 @@ func main() {
 			}
 
 			librariesDir := "./libraries"
-			if err := downloadLibraries(versionInfo, librariesDir); err != nil {
+			if err := downloadLibraries(versionInfo, librariesDir, config.MaxConnections); err != nil {
 				log.Println("下载库文件失败:", err)
 				return
 			}
@@ -307,7 +365,7 @@ func main() {
 			}
 
 			librariesDir := "./libraries"
-			if err := downloadLibraries(versionInfo, librariesDir); err != nil {
+			if err := downloadLibraries(versionInfo, librariesDir, config.MaxConnections); err != nil {
 				log.Println("下载库文件失败:", err)
 				return
 			}
