@@ -298,7 +298,22 @@ func main() {
 		if simpfun {
 			fmt.Println("已启用 simpfun 特调")
 		}
-
+		dir := "libraries"
+		if _, err := os.Stat(dir); !os.IsNotExist(err) {
+			fmt.Println("检测到", dir, "，你可能已经安装过Minecraft了")
+			fmt.Print("是否重新安装/升级？(y/n): ")
+			var response string
+			fmt.Scanln(&response)
+			if strings.ToLower(response) != "y" {
+				fmt.Println("操作已取消。")
+				return
+			}
+			// 防御性准备
+			if err := os.RemoveAll(dir); err != nil {
+				fmt.Println("删除目录失败:", err)
+				return
+			}
+		}
 		if config.Loader == "neoforge" && config.Download == "bmclapi" {
 			installerURL := fmt.Sprintf(
 				"https://bmclapi2.bangbang93.com/maven/net/neoforged/neoforge/%s/neoforge-%s-installer.jar",
