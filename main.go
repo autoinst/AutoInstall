@@ -99,11 +99,10 @@ func runInstaller(installerPath string, loader string, version string, loaderVer
 	if loader == "forge" {
 		cmd = exec.Command("java", "-jar", installerPath, "--installServer")
 	} else if loader == "fabric" {
-		// Fabric 特殊处理
 		cmd = exec.Command(
-			"java", "-jar", installerPath,
-			"-mavenurl", "https://bmclapi2.bangbang93.com/maven",
-			"-metaurl", "https://bmclapi2.bangbang93.com/fabric-meta",
+			"java", "-jar", installerPath, "server",
+			"-mavenurl", "https://bmclapi2.bangbang93.com/maven/",
+			"-metaurl", "https://bmclapi2.bangbang93.com/fabric-meta/",
 			"-mcversion", version,
 			"-loader", loaderVersion,
 		)
