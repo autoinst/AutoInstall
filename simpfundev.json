@@ -1,4 +1,201 @@
 [
+        {
+            "file": "/server.properties",
+            "name": "服务端基础配置",
+            "notice": "MC服务端基础配置，重启生效",
+            "exps": [
+                {
+                    "type": "string",
+                    "name": "服务器名称",
+                    "notice": "修改服务器的显示名称",
+                    "exp": "motd=(.+)"
+                },
+                {
+                    "type": "number",
+                    "name": "最大玩家数",
+                    "exp": "max-players=([0-9]+)"
+                },
+                {
+                    "type": "select",
+                    "name": "游戏难度",
+                    "exp": "difficulty=(peaceful|easy|normal|hard)",
+                    "options": [
+                        {
+                            "label": "和平",
+                            "value": "peaceful"
+                        },
+                        {
+                            "label": "简单",
+                            "value": "easy"
+                        },
+                        {
+                            "label": "一般",
+                            "value": "normal"
+                        },
+                        {
+                            "label": "困难",
+                            "value": "hard"
+                        }
+                    ]
+                },
+                {
+                    "type": "number",
+                    "name": "视野范围",
+                    "notice": "玩家最大可看到的区块距离,建议4-12，较高的值会显著降低服务器性能",
+                    "exp": "view-distance=([0-9]+)"
+                },
+                {
+                    "type": "number",
+                    "name": "模拟距离",
+                    "notice": "当玩家远离区块的距离超过设定值后，该区块会停止加载。生物、植物停止生长；红石系统停止运行，且实体将不渲染，方块停止更新渲染。建议4-8。较高的值会显著降低服务器性能",
+                    "exp": "simulation-distance=([0-9]+)"
+                },
+                {
+                    "type": "select",
+                    "name": "游戏模式",
+                    "notice": "选择玩家的游戏模式",
+                    "exp": "gamemode=(survival|creative|adventure)",
+                    "options": [
+                        {
+                            "label": "生存",
+                            "value": "survival"
+                        },
+                        {
+                            "label": "创造",
+                            "value": "creative"
+                        },
+                        {
+                            "label": "冒险",
+                            "value": "adventure"
+                        }
+                    ]
+                },
+                {
+                    "type": "boolean",
+                    "name": "启用命令方块",
+                    "exp": "enable-command-block=(true|false)",
+                    "rule": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "type": "boolean",
+                    "name": "允许飞行",
+                    "notice": "此处飞行指的是漂浮在空中，鞘翅移动，漂浮效果不算在内，基本是个摆设。如果网卡，或者有命令方块等，可能会造成服务器误判并踢出。",
+                    "exp": "allow-flight=(true|false)",
+                    "rule": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "type": "boolean",
+                    "name": "启用下界",
+                    "notice": "如果你不想要地狱这个维度可以把它关掉，会导致地狱维度不生成，且无法进入。",
+                    "exp": "allow-nether=(true|false)",
+                    "rule": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "type": "boolean",
+                    "name": "PVP模式",
+                    "notice": "允许玩家间互相攻击",
+                    "exp": "pvp=(true|false)",
+                    "rule": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "type": "boolean",
+                    "name": "正版验证",
+                    "notice": "在玩家登录时进行正版校验，只有认证用户才可登录",
+                    "exp": "online-mode=(true|false)",
+                    "rule": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "type": "boolean",
+                    "name": "白名单",
+                    "notice": "开启后仅白名单用户可加入服务器，必须<b>开启正版验证</b>后白名单才可使用。",
+                    "exp": "white-list=(true|false)",
+                    "rule": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "type": "number",
+                    "name": "最大建筑高度",
+                    "notice": "1.17版本及以上可调整至大于256",
+                    "exp": "max-build-height=([0-9]+)"
+                },
+                {
+                    "type": "number",
+                    "name": "玩家挂机踢出",
+                    "notice": "玩家挂机多久将会被踢出服务器，设置为0不进行判断，单位分钟",
+                    "exp": "player-idle-timeout=([0-9]+)"
+                },
+                {
+                    "type": "boolean",
+                    "name": "强制游戏模式",
+                    "notice": "无视之前玩家保存的游戏模式，在新加入时一律替换",
+                    "exp": "force-gamemode=(true|false)",
+                    "rule": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "type": "boolean",
+                    "name": "硬核模式",
+                    "notice": "当玩家死亡后，将无法复活，并且游戏难度将被锁定至困难",
+                    "exp": "hardcore=(true|false)",
+                    "rule": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "type": "number",
+                    "name": "出生点保护范围",
+                    "notice": "出生点周围的指定区块内无法被破坏",
+                    "exp": "spawn-protection=([0-9]+)"
+                },
+                {
+                    "type": "string",
+                    "name": "地图名称",
+                    "notice": "修改该值将会生成新的地图，在文件管理根目录下",
+                    "exp": "level-name=(.+)"
+                },
+                {
+                    "type": "number",
+                    "name": "地图种子",
+                    "exp": "level-seed=([-0-9]*)"
+                },
+                {
+                    "type": "select",
+                    "name": "地图类型",
+                    "exp": "level-type=(DEFAULT|FLAT)",
+                    "notice": "更改此设置生效需要重新生成地图",
+                    "options": [
+                        {
+                            "label": "正常",
+                            "value": "default"
+                        },
+                        {
+                            "label": "超平坦",
+                            "value": "flat"
+                        }
+             ]
+            }
+        ]
+    },
     {
         "file": "/inst.json",
         "name": "安装器配置",

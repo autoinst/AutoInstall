@@ -53,17 +53,17 @@ func downloadServerJar(version, loader, librariesDir string) error {
 
 	if loader == "forge" {
 		serverFileName = fmt.Sprintf("server-%s-bundled.jar", version)
-	} else if loader == "fabric" {
-		serverFileName = "server.jar"
-	} else {
+	} else if loader == "neoforge" {
 		serverFileName = fmt.Sprintf("server-%s.jar", version)
+	} else {
+		serverFileName = "server.jar"
 	}
 
 	var serverPath string
-	if loader == "fabric" {
-		serverPath = filepath.Join(".", serverFileName)
-	} else {
+	if loader == "neoforge" {
 		serverPath = filepath.Join(librariesDir, "net", "minecraft", "server", version, serverFileName)
+	} else {
+		serverPath = filepath.Join(".", serverFileName)
 	}
 
 	if err := os.MkdirAll(filepath.Dir(serverPath), os.ModePerm); err != nil {
@@ -480,6 +480,37 @@ func main() {
 			}
 			// 拼接运行命令
 			runCommand := fmt.Sprintf("%s -jar fabric-server-launch.jar", javaPath)
+			// 写入 run.sh 文件
+			if err := os.WriteFile(runScriptPath, []byte(runCommand), 0777); err != nil {
+				log.Printf("无法创建 run.sh 文件: %v", err)
+			} else {
+				fmt.Println("已创建运行脚本:", runScriptPath)
+			}
+		}
+		if config.Loader == "vanilla" && config.Download == "bmclapi" {
+			librariesDir := "./libraries"
+			if err := downloadServerJar(config.Version, config.Loader, librariesDir); err != nil {
+				log.Println("下载mc服务端失败:", err)
+				return
+			}
+			fmt.Println("服务端下载完成")
+			// 创建 run.sh 文件
+			runScriptPath := "run.sh"
+			var javaPath string
+			if simpfun {
+				// 根据版本号选择 Java 路径
+				if config.Version < "1.17" {
+					javaPath = "/usr/bin/jdk/jdk1.8.0_361/bin/java"
+				} else if config.Version >= "1.17" && config.Version <= "1.20.3" {
+					javaPath = "/usr/bin/jdk/jdk-17.0.6/bin/java"
+				} else {
+					javaPath = "/usr/bin/jdk/jdk-21.0.2/bin/java"
+				}
+			} else {
+				javaPath = "java"
+			}
+			// 拼接运行命令
+			runCommand := fmt.Sprintf("%s -jar server.jar", javaPath)
 			// 写入 run.sh 文件
 			if err := os.WriteFile(runScriptPath, []byte(runCommand), 0777); err != nil {
 				log.Printf("无法创建 run.sh 文件: %v", err)
