@@ -70,11 +70,18 @@ func downloadServerJar(version, loader, librariesDir string) error {
 
 	// 感谢SBforge改得到处都是
 	if loader == "forge" {
+		// 1.16.5-
 		symlinkPath := fmt.Sprintf("./minecraft_server.%s.jar", version)
 		if err := os.Symlink(serverPath, symlinkPath); err != nil {
 			return fmt.Errorf("无法创建符号链接 %s -> %s: %v", symlinkPath, serverPath, err)
 		}
 		fmt.Println("符号链接已创建:", symlinkPath, "->", serverPath)
+		// 1.17+
+		additionalSymlinkPath := filepath.Join(librariesDir, "net", "minecraft", "server", version, fmt.Sprintf("server-%s.jar", version))
+		if err := os.Symlink(serverPath, additionalSymlinkPath); err != nil {
+			return fmt.Errorf("无法创建符号链接 %s -> %s: %v", additionalSymlinkPath, serverPath, err)
+		}
+		fmt.Println("符号链接已创建:", additionalSymlinkPath, "->", serverPath)
 	}
 	return nil
 }
@@ -395,6 +402,27 @@ func main() {
 			fmt.Println("库文件下载完成")
 			if err := runInstaller(installerPath, config.Loader); err != nil {
 				log.Println("运行安装器失败:", err)
+			} else {
+				// 检测是否存在 forge-版本-加载器版本-universal.jar
+				universalJar := fmt.Sprintf("forge-%s-%s-universal.jar", config.Version, config.LoaderVersion)
+				if _, err := os.Stat(universalJar); err == nil {
+					// 创建 run.sh 文件
+					runScriptPath := "run.sh"
+					var runCommand string
+					if simpfun {
+						runCommand = fmt.Sprintf("/usr/bin/jdk/jdk1.8.0_361/bin/java -jar %s", universalJar)
+					} else {
+						runCommand = fmt.Sprintf("java -jar %s", universalJar)
+					}
+					// 写入 run.sh 文件
+					if err := os.WriteFile(runScriptPath, []byte(runCommand), 0755); err != nil {
+						log.Printf("无法创建 run.sh 文件: %v", err)
+					} else {
+						fmt.Println("已创建运行脚本:", runScriptPath)
+					}
+				} else {
+					fmt.Printf("未找到文件 %s，跳过创建运行脚本。\n", universalJar)
+				}
 			}
 		}
 	} else if os.IsNotExist(err) {
