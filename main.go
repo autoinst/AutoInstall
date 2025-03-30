@@ -446,7 +446,7 @@ func main() {
 			installerURL := fmt.Sprintf(
 				"https://bmclapi2.bangbang93.com/maven/net/fabricmc/fabric-installer/1.0.1/fabric-installer-1.0.1.jar",
 			)
-			installerPath := filepath.Join("./.autoinst/cache", fmt.Sprintf("fabric-installer-1.0.1"))
+			installerPath := filepath.Join("./.autoinst/cache", fmt.Sprintf("fabric-installer-1.0.1.jar"))
 			fmt.Println("检测到 fabric 加载器，仅从BMCLAPI下载原版服务端:", installerURL)
 			if err := downloadFile(installerURL, installerPath); err != nil {
 				log.Println("下载 fabric 失败:", err)
