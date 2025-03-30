@@ -51,7 +51,6 @@ func downloadServerJar(version, loader, librariesDir string) error {
 	downloadURL := fmt.Sprintf("https://bmclapi2.bangbang93.com/version/%s/server", version)
 	var serverFileName string
 
-	// 如果是 Forge，使用 bundled 版本
 	if loader == "forge" {
 		serverFileName = fmt.Sprintf("server-%s-bundled.jar", version)
 	} else {
@@ -68,6 +67,15 @@ func downloadServerJar(version, loader, librariesDir string) error {
 		return fmt.Errorf("无法下载服务端文件 %s: %v", serverPath, err)
 	}
 	fmt.Println("下载完成 Minecraft 服务端:", serverPath)
+
+	// 感谢SBforge改得到处都是
+	if loader == "forge" {
+		symlinkPath := fmt.Sprintf("./minecraft_server.%s.jar", version)
+		if err := os.Symlink(serverPath, symlinkPath); err != nil {
+			return fmt.Errorf("无法创建符号链接 %s -> %s: %v", symlinkPath, serverPath, err)
+		}
+		fmt.Println("符号链接已创建:", symlinkPath, "->", serverPath)
+	}
 	return nil
 }
 
@@ -268,7 +276,6 @@ func findJava() (string, bool) {
 }
 
 func main() {
-	os.MkdirAll(".autoinst/cache", os.ModePerm)
 	instFile := "inst.json"
 	var config InstConfig
 	if _, err := os.Stat(instFile); err == nil {
@@ -308,12 +315,16 @@ func main() {
 				fmt.Println("操作已取消。")
 				return
 			}
-			// 防御性准备
 			if err := os.RemoveAll(dir); err != nil {
 				fmt.Println("删除目录失败:", err)
 				return
 			}
+			if err := os.RemoveAll(".autoinst"); err != nil {
+				fmt.Println("删除 .autoinst 目录失败:", err)
+				return
+			}
 		}
+		os.MkdirAll(".autoinst/cache", os.ModePerm)
 		if config.Loader == "neoforge" && config.Download == "bmclapi" {
 			installerURL := fmt.Sprintf(
 				"https://bmclapi2.bangbang93.com/maven/net/neoforged/neoforge/%s/neoforge-%s-installer.jar",
