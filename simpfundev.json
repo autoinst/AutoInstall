@@ -224,6 +224,10 @@
                     {
                         "label": "NeoForge",
                         "value": "neoforge"
+                    },
+                    {
+                        "label": "原版",
+                        "value": "vanilla"
                     }
                 ]
             },
