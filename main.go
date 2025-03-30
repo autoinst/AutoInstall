@@ -53,11 +53,18 @@ func downloadServerJar(version, loader, librariesDir string) error {
 
 	if loader == "forge" {
 		serverFileName = fmt.Sprintf("server-%s-bundled.jar", version)
+	} else if loader == "fabric" {
+		serverFileName = "server.jar"
 	} else {
 		serverFileName = fmt.Sprintf("server-%s.jar", version)
 	}
 
-	serverPath := filepath.Join(librariesDir, "net", "minecraft", "server", version, serverFileName)
+	var serverPath string
+	if loader == "fabric" {
+		serverPath = filepath.Join(".", serverFileName)
+	} else {
+		serverPath = filepath.Join(librariesDir, "net", "minecraft", "server", version, serverFileName)
+	}
 
 	if err := os.MkdirAll(filepath.Dir(serverPath), os.ModePerm); err != nil {
 		return fmt.Errorf("无法创建目录: %v", err)
@@ -83,24 +90,27 @@ func downloadServerJar(version, loader, librariesDir string) error {
 			return fmt.Errorf("无法创建符号链接 %s -> %s: %v", additionalSymlinkPath, serverPath, err)
 		}
 		fmt.Println("符号链接已创建:", additionalSymlinkPath, "->", serverPath)
-	} else if loader == "fabric" {
-		// Fabric
-		symlinkPath := "./server.jar"
-		if err := os.Symlink(serverPath, symlinkPath); err != nil {
-			return fmt.Errorf("无法创建符号链接 %s -> %s: %v", symlinkPath, serverPath, err)
-		}
-		fmt.Println("符号链接已创建:", symlinkPath, "->", serverPath)
 	}
 	return nil
 }
 
-func runInstaller(installerPath string, loader string) error {
+func runInstaller(installerPath string, loader string, version string, loaderVersion string) error {
 	var cmd *exec.Cmd
-	if strings.Contains(installerPath, "forge") {
+	if loader == "forge" {
 		cmd = exec.Command("java", "-jar", installerPath, "--installServer")
+	} else if loader == "fabric" {
+		// Fabric 特殊处理
+		cmd = exec.Command(
+			"java", "-jar", installerPath,
+			"-mavenurl", "https://bmclapi2.bangbang93.com/maven",
+			"-metaurl", "https://bmclapi2.bangbang93.com/fabric-meta",
+			"-mcversion", version,
+			"-loader", loaderVersion,
+		)
 	} else {
 		cmd = exec.Command("java", "-jar", installerPath)
 	}
+
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return fmt.Errorf("无法获取标准输出: %v", err)
@@ -372,7 +382,7 @@ func main() {
 			}
 
 			fmt.Println("库文件下载完成")
-			if err := runInstaller(installerPath, config.Loader); err != nil {
+			if err := runInstaller(installerPath, config.Loader, config.LoaderVersion, config.Version); err != nil {
 				log.Println("运行安装器失败:", err)
 			}
 		}
@@ -408,7 +418,7 @@ func main() {
 			}
 
 			fmt.Println("库文件下载完成")
-			if err := runInstaller(installerPath, config.Loader); err != nil {
+			if err := runInstaller(installerPath, config.Loader, config.LoaderVersion, config.Version); err != nil {
 				log.Println("运行安装器失败:", err)
 			} else {
 				// 检测是否存在 forge-版本-加载器版本-universal.jar
@@ -450,7 +460,7 @@ func main() {
 				return
 			}
 			fmt.Println("服务端下载完成")
-			if err := runInstaller(installerPath, config.Loader); err != nil {
+			if err := runInstaller(installerPath, config.Loader, config.LoaderVersion, config.LoaderVersion); err != nil {
 				log.Println("运行安装器失败:", err)
 			}
 		}
