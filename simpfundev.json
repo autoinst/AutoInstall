@@ -211,7 +211,7 @@
                 "type": "select",
                 "name": "加载器",
                 "notice": "选择需要的加载器",
-                "exp": "\"loader\": \"(forge|fabric|neoforge)\"",
+                "exp": "\"loader\": \"(forge|fabric|neoforge|vanilla)\"",
                 "options": [
                     {
                         "label": "Forge",
