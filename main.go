@@ -53,17 +53,17 @@ func downloadServerJar(version, loader, librariesDir string) error {
 
 	if loader == "forge" {
 		serverFileName = fmt.Sprintf("server-%s-bundled.jar", version)
-	} else if loader == "neoforge" {
-		serverFileName = fmt.Sprintf("server-%s.jar", version)
-	} else {
+	} else if loader == "fabric" {
 		serverFileName = "server.jar"
+	} else {
+		serverFileName = fmt.Sprintf("server-%s.jar", version)
 	}
 
 	var serverPath string
-	if loader == "neoforge" {
-		serverPath = filepath.Join(librariesDir, "net", "minecraft", "server", version, serverFileName)
-	} else {
+	if loader == "fabric" {
 		serverPath = filepath.Join(".", serverFileName)
+	} else {
+		serverPath = filepath.Join(librariesDir, "net", "minecraft", "server", version, serverFileName)
 	}
 
 	if err := os.MkdirAll(filepath.Dir(serverPath), os.ModePerm); err != nil {
