@@ -401,7 +401,7 @@ func main() {
 		if config.Loader != "vanilla" {
 			fmt.Printf("加载器: %s\n", config.Loader)
 			fmt.Printf("加载器版本: %s\n", config.LoaderVersion)
-			fmt.Println("\033[31m[警告],加载器版本过新可能会无法正常下载\033[0m")
+			fmt.Println("\033[31m[警告]加载器版本过新可能会无法正常下载\033[0m")
 		}
 		fmt.Printf("下载源: %s\n", config.Download)
 
