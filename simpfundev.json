@@ -240,6 +240,7 @@
             {
                 "type": "select",
                 "name": "下载源",
+                "notice": "非必要不要碰",
                 "exp": "\"download\": \"(bmclapi|none)\"",
                 "options": [
                     {

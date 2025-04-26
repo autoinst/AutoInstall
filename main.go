@@ -77,37 +77,49 @@ func downloadServerJar(version, loader, librariesDir string) error {
 
 	// 感谢SBforge改得到处都是
 	if loader == "forge" {
-		// 1.16.5-
-		symlinkPath := fmt.Sprintf("./minecraft_server.%s.jar", version)
+		var symlinkPath string
+		if version < "1.16.5" {
+			symlinkPath = fmt.Sprintf("./minecraft_server.%s.jar", version)
+		} else {
+			symlinkPath = filepath.Join(librariesDir, "net", "minecraft", "server", version, fmt.Sprintf("server-%s.jar", version))
+		}
+
 		if err := os.Symlink(serverPath, symlinkPath); err != nil {
 			return fmt.Errorf("无法创建符号链接 %s -> %s: %v", symlinkPath, serverPath, err)
 		}
 		fmt.Println("符号链接已创建:", symlinkPath, "->", serverPath)
-
-		// 1.17+
-		additionalSymlinkPath := filepath.Join(librariesDir, "net", "minecraft", "server", version, fmt.Sprintf("server-%s.jar", version))
-		if err := os.Symlink(serverPath, additionalSymlinkPath); err != nil {
-			return fmt.Errorf("无法创建符号链接 %s -> %s: %v", additionalSymlinkPath, serverPath, err)
-		}
-		fmt.Println("符号链接已创建:", additionalSymlinkPath, "->", serverPath)
 	}
 	return nil
 }
 
-func runInstaller(installerPath string, loader string, version string, loaderVersion string) error {
+func runInstaller(installerPath string, loader string, version string, loaderVersion string, Download string) error {
 	var cmd *exec.Cmd
-	if loader == "forge" {
-		cmd = exec.Command("java", "-jar", installerPath, "--installServer")
-	} else if loader == "fabric" {
-		cmd = exec.Command(
-			"java", "-jar", installerPath, "server",
-			"-mavenurl", "https://bmclapi2.bangbang93.com/maven/",
-			"-metaurl", "https://bmclapi2.bangbang93.com/fabric-meta/",
-			"-mcversion", version,
-			"-loader", loaderVersion,
-		)
+	if Download == "bmclapi" {
+		if loader == "forge" {
+			cmd = exec.Command("java", "-jar", installerPath, "--installServer", "--mirror", "https://bmclapi2.bangbang93.com/maven/")
+		} else if loader == "fabric" {
+			cmd = exec.Command(
+				"java", "-jar", installerPath, "server",
+				"-mavenurl", "https://bmclapi2.bangbang93.com/maven/",
+				"-metaurl", "https://bmclapi2.bangbang93.com/fabric-meta/",
+				"-mcversion", version,
+				"-loader", loaderVersion,
+			)
+		} else {
+			cmd = exec.Command("java", "-jar", installerPath)
+		}
 	} else {
-		cmd = exec.Command("java", "-jar", installerPath)
+		if loader == "forge" {
+			cmd = exec.Command("java", "-jar", installerPath, "--installServer")
+		} else if loader == "fabric" {
+			cmd = exec.Command(
+				"java", "-jar", installerPath, "server",
+				"-mcversion", version,
+				"-loader", loaderVersion,
+			)
+		} else {
+			cmd = exec.Command("java", "-jar", installerPath)
+		}
 	}
 
 	stdout, err := cmd.StdoutPipe()
@@ -141,6 +153,15 @@ func downloadFile(url, filePath string) error {
 		return fmt.Errorf("无法下载文件: %v", err)
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		fmt.Printf("文件未找到，跳过下载: %s\n", url)
+		return nil
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("下载文件失败，状态码: %d", resp.StatusCode)
+	}
 
 	file, err := os.Create(filePath)
 	if err != nil {
@@ -316,46 +337,40 @@ func main() {
 
 		fmt.Println("准备安装:")
 		fmt.Printf("Minecraft版本: %s\n", config.Version)
-		fmt.Printf("加载器: %s\n", config.Loader)
-		fmt.Printf("加载器版本: %s\n", config.LoaderVersion)
+		fmt.Printf("Minecraft版本: %s\n", config.Version)
+		if config.Loader != "vanilla" {
+			fmt.Printf("加载器: %s\n", config.Loader)
+			fmt.Printf("加载器版本: %s\n", config.LoaderVersion)
+		}
 		fmt.Printf("下载源: %s\n", config.Download)
 
 		javaPath, simpfun := findJava()
 		if javaPath == "" {
-			log.Println("未找到 Java，请确保已安装 Java 并设置 JAVA_HOME。")
+			log.Println("未找到 Java，请确保已安装 Java 并设置 PATH。")
 			return
 		}
 		fmt.Println("找到 Java 运行环境:", javaPath)
 		if simpfun {
-			fmt.Println("已启用 simpfun 特调")
-		}
-		dir := "libraries"
-		if _, err := os.Stat(dir); !os.IsNotExist(err) {
-			fmt.Println("检测到", dir, "，你可能已经安装过Minecraft了")
-			fmt.Print("是否重新安装/升级？(y/n): ")
-			var response string
-			fmt.Scanln(&response)
-			if strings.ToLower(response) != "y" {
-				fmt.Println("操作已取消。")
-				return
-			}
-			if err := os.RemoveAll(dir); err != nil {
-				fmt.Println("删除目录失败:", err)
-				return
-			}
-			if err := os.RemoveAll(".autoinst"); err != nil {
-				fmt.Println("删除 .autoinst 目录失败:", err)
-				return
-			}
+			fmt.Println("已启用 simpfun 环境")
 		}
 		os.MkdirAll(".autoinst/cache", os.ModePerm)
-		if config.Loader == "neoforge" && config.Download == "bmclapi" {
-			installerURL := fmt.Sprintf(
-				"https://bmclapi2.bangbang93.com/maven/net/neoforged/neoforge/%s/neoforge-%s-installer.jar",
-				config.LoaderVersion, config.LoaderVersion,
-			)
+		if config.Loader == "neoforge" {
+			var installerURL string
+			if config.Download == "bmclapi" {
+				installerURL = fmt.Sprintf(
+					"https://bmclapi2.bangbang93.com/maven/net/neoforged/neoforge/%s/neoforge-%s-installer.jar",
+					config.LoaderVersion, config.LoaderVersion,
+				)
+			} else {
+				// 这里替换为官方源的URL，如果存在
+				installerURL = fmt.Sprintf(
+					"https://maven.neoforged.net/releases/net/neoforged/neoforge/%s/neoforge-%s-installer.jar",
+					config.LoaderVersion, config.LoaderVersion,
+				)
+			}
+
 			installerPath := filepath.Join("./.autoinst/cache", fmt.Sprintf("neoforge-%s-installer.jar", config.LoaderVersion))
-			fmt.Println("检测到 neoforge 加载器，正在从 BMCLAPI 下载:", installerURL)
+			fmt.Println("当前为 neoforge 加载器，正在下载:", installerURL)
 			if err := downloadFile(installerURL, installerPath); err != nil {
 				log.Println("下载 neoforge 失败:", err)
 				return
@@ -381,17 +396,26 @@ func main() {
 			}
 
 			fmt.Println("库文件下载完成")
-			if err := runInstaller(installerPath, config.Loader, config.Version, config.LoaderVersion); err != nil {
+			if err := runInstaller(installerPath, config.Loader, config.Version, config.LoaderVersion, config.Download); err != nil {
 				log.Println("运行安装器失败:", err)
 			}
 		}
-		if config.Loader == "forge" && config.Download == "bmclapi" {
-			installerURL := fmt.Sprintf(
-				"https://bmclapi2.bangbang93.com/maven/net/minecraftforge/forge/%s-%s/forge-%s-%s-installer.jar",
-				config.Version, config.LoaderVersion, config.Version, config.LoaderVersion,
-			)
+		if config.Loader == "forge" {
+			var installerURL string
+			if config.Download == "bmclapi" {
+				installerURL = fmt.Sprintf(
+					"https://bmclapi2.bangbang93.com/maven/net/minecraftforge/forge/%s-%s/forge-%s-%s-installer.jar",
+					config.Version, config.LoaderVersion, config.Version, config.LoaderVersion,
+				)
+			} else {
+				// 这里替换为官方源的URL，如果存在
+				installerURL = fmt.Sprintf(
+					"https://maven.minecraftforge.net/maven/net/minecraftforge/forge/%s-%s/forge-%s-%s-installer.jar",
+					config.Version, config.LoaderVersion, config.Version, config.LoaderVersion,
+				)
+			}
 			installerPath := filepath.Join("./.autoinst/cache", fmt.Sprintf("forge-%s-%s-installer.jar", config.Version, config.LoaderVersion))
-			fmt.Println("检测到 forge 加载器，正在从 BMCLAPI 下载:", installerURL)
+			fmt.Println("当前为 forge 加载器，正在下载:", installerURL)
 			if err := downloadFile(installerURL, installerPath); err != nil {
 				log.Println("下载 forge 失败:", err)
 				return
@@ -417,7 +441,7 @@ func main() {
 			}
 
 			fmt.Println("库文件下载完成")
-			if err := runInstaller(installerPath, config.Loader, config.Version, config.LoaderVersion); err != nil {
+			if err := runInstaller(installerPath, config.Loader, config.Version, config.LoaderVersion, config.Download); err != nil {
 				log.Println("运行安装器失败:", err)
 			} else {
 				// 检测是否存在 forge-版本-加载器版本-universal.jar
@@ -442,12 +466,11 @@ func main() {
 				}
 			}
 		}
-		if config.Loader == "fabric" && config.Download == "bmclapi" {
-			installerURL := fmt.Sprintf(
-				"https://maven.fabricmc.net/net/fabricmc/fabric-installer/1.0.1/fabric-installer-1.0.1.jar",
-			)
-			installerPath := filepath.Join("./.autoinst/cache", fmt.Sprintf("fabric-installer-1.0.1.jar"))
-			fmt.Println("检测到 fabric 加载器，仅从BMCLAPI下载原版服务端:", installerURL)
+		if config.Loader == "fabric" {
+			var installerURL string
+			installerURL = "https://maven.fabricmc.net/net/fabricmc/fabric-installer/1.0.1/fabric-installer-1.0.1.jar"
+			installerPath := filepath.Join("./.autoinst/cache", "fabric-installer-1.0.1.jar")
+			fmt.Println("当前为 fabric 加载器，正在下载:", installerURL)
 			if err := downloadFile(installerURL, installerPath); err != nil {
 				log.Println("下载 fabric 失败:", err)
 				return
@@ -459,7 +482,7 @@ func main() {
 				return
 			}
 			fmt.Println("服务端下载完成")
-			if err := runInstaller(installerPath, config.Loader, config.Version, config.LoaderVersion); err != nil {
+			if err := runInstaller(installerPath, config.Loader, config.Version, config.LoaderVersion, config.Download); err != nil {
 				log.Println("运行安装器失败:", err)
 				return
 			}
@@ -487,7 +510,7 @@ func main() {
 				fmt.Println("已创建运行脚本:", runScriptPath)
 			}
 		}
-		if config.Loader == "vanilla" && config.Download == "bmclapi" {
+		if config.Loader == "vanilla" {
 			librariesDir := "./libraries"
 			if err := downloadServerJar(config.Version, config.Loader, librariesDir); err != nil {
 				log.Println("下载mc服务端失败:", err)
