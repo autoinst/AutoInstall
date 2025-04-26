@@ -47,6 +47,8 @@ type VersionInfo struct {
 	Libraries []Library `json:"libraries"`
 }
 
+var gitversion string
+
 func downloadServerJar(version, loader, librariesDir string) error {
 	downloadURL := fmt.Sprintf("https://bmclapi2.bangbang93.com/version/%s/server", version)
 	var serverFileName string
@@ -321,6 +323,12 @@ func findJava() (string, bool) {
 }
 
 func main() {
+	if gitversion == "" {
+		gitversion = "NaN"
+	}
+	if len(os.Args) > 1 && os.Args[1] == "--version" {
+		fmt.Println("AutoInstall-" + gitversion)
+	}
 	instFile := "inst.json"
 	var config InstConfig
 	if _, err := os.Stat(instFile); err == nil {
@@ -334,9 +342,8 @@ func main() {
 			log.Println("无法解析 inst.json 文件:", err)
 			return
 		}
-
+		fmt.Println("AutoInstall-" + gitversion + " https://github.com/autoinst/AutoInstall")
 		fmt.Println("准备安装:")
-		fmt.Printf("Minecraft版本: %s\n", config.Version)
 		fmt.Printf("Minecraft版本: %s\n", config.Version)
 		if config.Loader != "vanilla" {
 			fmt.Printf("加载器: %s\n", config.Loader)
