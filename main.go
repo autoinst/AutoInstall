@@ -150,33 +150,41 @@ func runInstaller(installerPath string, loader string, version string, loaderVer
 
 // 下载文件的函数
 func downloadFile(url, filePath string) error {
-	resp, err := http.Get(url)
-	if err != nil {
-		return fmt.Errorf("无法下载文件: %v", err)
-	}
-	defer resp.Body.Close()
+	const maxRetries = 3
+	var err error
+	for i := 0; i < maxRetries; i++ {
+		resp, err := http.Get(url)
+		if err != nil {
+			fmt.Printf("下载文件尝试 %d/%d 失败: %v\n", i+1, maxRetries, err)
+			continue
+		}
+		defer resp.Body.Close()
 
-	if resp.StatusCode == http.StatusNotFound {
-		fmt.Printf("文件未找到，跳过下载: %s\n", url)
+		if resp.StatusCode == http.StatusNotFound {
+			fmt.Printf("文件未找到，跳过下载: %s\n", url)
+			return nil
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			fmt.Printf("下载文件失败，状态码: %d\n", resp.StatusCode)
+			continue
+		}
+
+		file, err := os.Create(filePath)
+		if err != nil {
+			return fmt.Errorf("无法创建文件: %v", err)
+		}
+		defer file.Close()
+
+		_, err = io.Copy(file, resp.Body)
+		if err != nil {
+			fmt.Printf("写入文件尝试 %d/%d 失败: %v\n", i+1, maxRetries, err)
+			continue
+		}
+
 		return nil
 	}
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("下载文件失败，状态码: %d", resp.StatusCode)
-	}
-
-	file, err := os.Create(filePath)
-	if err != nil {
-		return fmt.Errorf("无法创建文件: %v", err)
-	}
-	defer file.Close()
-
-	_, err = io.Copy(file, resp.Body)
-	if err != nil {
-		return fmt.Errorf("无法写入文件: %v", err)
-	}
-
-	return nil
+	return fmt.Errorf("下载文件失败，经过 %d 次尝试: %v", maxRetries, err)
 }
 
 // 从 JAR 文件中提取 version.json
