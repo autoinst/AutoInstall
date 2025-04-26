@@ -14,6 +14,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 )
 
 // InstConfig 结构体表示 inst.json 的内容
@@ -176,7 +177,26 @@ func downloadFile(url, filePath string) error {
 		}
 		defer file.Close()
 
-		_, err = io.Copy(file, resp.Body)
+		// 使用 io.TeeReader 报告下载进度
+		body := resp.Body
+		totalBytes, _ := io.Copy(io.Discard, body) // 获取文件大小
+		resp.Body.Close()                          // 关闭先前的 body
+		resp, err = http.Get(url)                  // 重新发起请求
+		if err != nil {
+			return fmt.Errorf("重新获取文件失败: %v", err)
+		}
+		defer resp.Body.Close()
+		body = resp.Body
+
+		reader := &ProgressReader{
+			Reader:          body,
+			Total:           totalBytes,
+			FilePath:        filePath,
+			UpdateInterval:  3, // 每 3 秒更新一次
+			lastUpdatedTime: 0,
+		}
+
+		_, err = io.Copy(file, reader)
 		if err != nil {
 			fmt.Printf("写入文件尝试 %d/%d 失败: %v\n", i+1, maxRetries, err)
 			continue
@@ -185,6 +205,31 @@ func downloadFile(url, filePath string) error {
 		return nil
 	}
 	return fmt.Errorf("下载文件失败，经过 %d 次尝试: %v", maxRetries, err)
+}
+
+// ProgressReader 用于跟踪 io.Reader 的进度
+type ProgressReader struct {
+	Reader          io.ReadCloser
+	Total           int64
+	Current         int64
+	FilePath        string
+	UpdateInterval  int64 // 更新间隔，单位秒
+	lastUpdatedTime int64
+}
+
+// Read 实现了 io.Reader 接口
+func (pr *ProgressReader) Read(p []byte) (n int, err error) {
+	n, err = pr.Reader.Read(p)
+	pr.Current += int64(n)
+
+	currentTime := time.Now().Unix()
+	if currentTime-pr.lastUpdatedTime >= pr.UpdateInterval || err == io.EOF {
+		pr.lastUpdatedTime = currentTime
+		progress := float64(pr.Current) / float64(pr.Total) * 100
+		fmt.Printf("下载进度: %.2f%% (%s)\n", progress, pr.FilePath)
+	}
+
+	return
 }
 
 // 从 JAR 文件中提取 version.json
