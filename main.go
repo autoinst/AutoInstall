@@ -15,6 +15,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/autoinst/AutoInstall/packages"
 )
 
 // InstConfig 结构体表示 inst.json 的内容
@@ -376,11 +378,18 @@ func findJava() (string, bool) {
 }
 
 func main() {
+	packages.SayHello()
 	if gitversion == "" {
 		gitversion = "NaN"
 	}
+	if len(os.Args) > 1 && os.Args[1] == "--help" {
+		fmt.Println("--help 获取帮助")
+		fmt.Println("--version 获取版本")
+		return
+	}
 	if len(os.Args) > 1 && os.Args[1] == "--version" {
 		fmt.Println("AutoInstall-" + gitversion)
+		return
 	}
 	instFile := "inst.json"
 	var config InstConfig

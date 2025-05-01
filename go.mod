@@ -1,3 +1,3 @@
-module app.go
+module github.com/autoinst/AutoInstall
 
-go 1.22.2
+go 1.22.5
