@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 
 	"github.com/autoinst/AutoInstall/core"
-	"github.com/autoinst/AutoInstall/packages"
 )
 
 // NeoForgeB 函数用于安装 NeoForge 加载器
@@ -41,18 +40,18 @@ func NeoForgeB(config core.InstConfig) {
 	}
 
 	librariesDir := "./libraries"
-	if err := packages.DownloadLibraries(versionInfo, librariesDir, config.MaxConnections); err != nil {
+	if err := DownloadLibraries(versionInfo, librariesDir, config.MaxConnections); err != nil {
 		log.Println("下载库文件失败:", err)
 		return
 	}
 
-	if err := packages.DownloadServerJar(config.Version, config.Loader, librariesDir); err != nil {
+	if err := DownloadServerJar(config.Version, config.Loader, librariesDir); err != nil {
 		log.Println("下载mc服务端失败:", err)
 		return
 	}
 
 	fmt.Println("库文件下载完成")
-	if err := packages.RunInstaller(installerPath, config.Loader, config.Version, config.LoaderVersion, config.Download); err != nil {
+	if err := core.RunInstaller(installerPath, config.Loader, config.Version, config.LoaderVersion, config.Download); err != nil {
 		log.Println("运行安装器失败:", err)
 	}
 }
