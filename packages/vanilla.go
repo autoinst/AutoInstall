@@ -21,7 +21,7 @@ func DownloadServerJar(version, loader, librariesDir string) error {
 	}
 
 	var serverPath string
-	if loader == "fabric" {
+	if loader == "fabric" || loader == "vanilla" {
 		serverPath = filepath.Join(".", serverFileName)
 	} else {
 		serverPath = filepath.Join(librariesDir, "net", "minecraft", "server", version, serverFileName)
