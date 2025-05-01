@@ -1,6 +1,6 @@
 {
     "version": "1.21.1",
-    "loader": "neoforge",
+    "loader": "vanilla",
     "loaderVersion": "1.0.0",
     "download": "bmclapi",
     "maxconnections": 10
