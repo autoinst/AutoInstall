@@ -14,7 +14,7 @@ func DownloadServerJar(version, loader, librariesDir string) error {
 
 	if loader == "forge" {
 		serverFileName = fmt.Sprintf("server-%s-bundled.jar", version)
-	} else if loader == "fabric" {
+	} else if loader == "fabric" || loader == "vanilla" {
 		serverFileName = "server.jar"
 	} else {
 		serverFileName = fmt.Sprintf("server-%s.jar", version)
