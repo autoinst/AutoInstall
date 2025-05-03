@@ -108,8 +108,9 @@ func Modrinth(file string) {
 
 	// 创建 inst.json 文件
 	instConfig := core.InstConfig{
-		Version:  modrinthIndex.Dependencies.Minecraft,
-		Download: "bmclapi", // 默认 bmclapi
+		Version:        modrinthIndex.Dependencies.Minecraft,
+		Download:       "bmclapi", // 默认 bmclapi
+		MaxConnections: 16,
 	}
 
 	if modrinthIndex.Dependencies.NeoForge != "" {
