@@ -49,6 +49,7 @@ func main() {
 		fmt.Println("AutoInstall-" + gitversion)
 		return
 	}
+	os.MkdirAll(".autoinst/cache", os.ModePerm)
 	instFile := "inst.json"
 	var config core.InstConfig
 	fmt.Println("AutoInstall-" + gitversion + " https://github.com/autoinst/AutoInstall")
@@ -83,7 +84,7 @@ func main() {
 		if simpfun {
 			fmt.Println("已启用 simpfun 环境")
 		}
-		os.MkdirAll(".autoinst/cache", os.ModePerm)
+
 		if config.Loader == "neoforge" {
 			packages.NeoForgeB(core.InstConfig{}, simpfun)
 		}
