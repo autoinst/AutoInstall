@@ -9,12 +9,12 @@ import (
 	"github.com/autoinst/AutoInstall/core"
 )
 
-// NeoForgeB 函数用于安装 NeoForge 加载器
 func NeoForgeB(config core.InstConfig, simpfun bool) {
 	var installerURL string
 	installerURL = fmt.Sprintf(
 		"https://bmclapi2.bangbang93.com/maven/net/neoforged/neoforge/%s/neoforge-%s-installer.jar",
-		config.LoaderVersion, config.LoaderVersion)
+		config.LoaderVersion, config.LoaderVersion,
+	)
 
 	installerPath := filepath.Join("./.autoinst/cache", fmt.Sprintf("neoforge-%s-installer.jar", config.LoaderVersion))
 	fmt.Println("当前为 neoforge 加载器，正在下载:", installerURL)
