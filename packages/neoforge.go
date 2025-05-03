@@ -12,18 +12,9 @@ import (
 // NeoForgeB 函数用于安装 NeoForge 加载器
 func NeoForgeB(config core.InstConfig, simpfun bool) {
 	var installerURL string
-	if config.Download == "bmclapi" {
-		installerURL = fmt.Sprintf(
-			"https://bmclapi2.bangbang93.com/maven/net/neoforged/neoforge/%s/neoforge-%s-installer.jar",
-			config.LoaderVersion, config.LoaderVersion,
-		)
-	} else {
-		// 这里替换为官方源的URL，如果存在
-		installerURL = fmt.Sprintf(
-			"https://maven.neoforged.net/releases/net/neoforged/neoforge/%s/neoforge-%s-installer.jar",
-			config.LoaderVersion, config.LoaderVersion,
-		)
-	}
+	installerURL = fmt.Sprintf(
+		"https://bmclapi2.bangbang93.com/maven/net/neoforged/neoforge/%s/neoforge-%s-installer.jar",
+		config.LoaderVersion, config.LoaderVersion)
 
 	installerPath := filepath.Join("./.autoinst/cache", fmt.Sprintf("neoforge-%s-installer.jar", config.LoaderVersion))
 	fmt.Println("当前为 neoforge 加载器，正在下载:", installerURL)
@@ -55,8 +46,7 @@ func NeoForgeB(config core.InstConfig, simpfun bool) {
 	if err := core.RunInstaller(installerPath, config.Loader, config.Version, config.LoaderVersion, config.Download); err != nil {
 		log.Println("运行安装器失败:", err)
 	} else {
-		// 检测是否存在 forge-版本-加载器版本-universal.jar
-		universalJar := fmt.Sprintf("forge-%s-%s-universal.jar", config.Version, config.LoaderVersion)
+		universalJar := fmt.Sprintf("neoforge-%s-%s-universal.jar", config.Version, config.LoaderVersion)
 		if _, err := os.Stat(universalJar); err == nil {
 			// 创建 run.sh 文件
 			runScriptPath := "run.sh"
