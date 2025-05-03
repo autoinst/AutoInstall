@@ -121,7 +121,7 @@ func Modrinth(file string) {
 	} else if modrinthIndex.Dependencies.Forge != "" {
 		instConfig.Loader = "forge"
 		instConfig.LoaderVersion = modrinthIndex.Dependencies.Forge
-	} else if strings.Contains(modrinthIndex.Dependencies.Fabric, "fabric-loader") {
+	} else {
 		instConfig.Loader = "fabric"
 		instConfig.LoaderVersion = modrinthIndex.Dependencies.Fabric
 	}
