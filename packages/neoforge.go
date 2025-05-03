@@ -3,13 +3,14 @@ package packages
 import (
 	"fmt"
 	"log"
+	"os"
 	"path/filepath"
 
 	"github.com/autoinst/AutoInstall/core"
 )
 
 // NeoForgeB 函数用于安装 NeoForge 加载器
-func NeoForgeB(config core.InstConfig) {
+func NeoForgeB(config core.InstConfig, simpfun bool) {
 	var installerURL string
 	if config.Download == "bmclapi" {
 		installerURL = fmt.Sprintf(
@@ -53,5 +54,26 @@ func NeoForgeB(config core.InstConfig) {
 	fmt.Println("库文件下载完成")
 	if err := core.RunInstaller(installerPath, config.Loader, config.Version, config.LoaderVersion, config.Download); err != nil {
 		log.Println("运行安装器失败:", err)
+	} else {
+		// 检测是否存在 forge-版本-加载器版本-universal.jar
+		universalJar := fmt.Sprintf("forge-%s-%s-universal.jar", config.Version, config.LoaderVersion)
+		if _, err := os.Stat(universalJar); err == nil {
+			// 创建 run.sh 文件
+			runScriptPath := "run.sh"
+			var runCommand string
+			if simpfun {
+				runCommand = fmt.Sprintf("/usr/bin/jdk/jdk1.8.0_361/bin/java -jar %s", universalJar)
+			} else {
+				runCommand = fmt.Sprintf("java -jar %s", universalJar)
+			}
+			// 写入 run.sh 文件
+			if err := os.WriteFile(runScriptPath, []byte(runCommand), 0755); err != nil {
+				log.Printf("无法创建 run.sh 文件: %v", err)
+			} else {
+				fmt.Println("已创建运行脚本:", runScriptPath)
+			}
+		} else {
+			fmt.Printf("未找到文件 %s，跳过创建运行脚本。\n", universalJar)
+		}
 	}
 }

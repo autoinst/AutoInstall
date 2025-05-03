@@ -5,12 +5,36 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 
 	"github.com/autoinst/AutoInstall/core"
 	"github.com/autoinst/AutoInstall/packages"
 )
 
 var gitversion string
+
+func Search() {
+	mrpackFiles, err := filepath.Glob("modpack.mrpack")
+	if err != nil {
+		return
+	}
+	indexFiles, err := filepath.Glob("modrinth.index.json")
+	if err != nil {
+		return
+	}
+	if len(mrpackFiles) == 0 && len(indexFiles) == 0 {
+		fmt.Println("未找到Modrinth整合包")
+		return
+	}
+	for _, file := range mrpackFiles {
+		fmt.Println("已有" + file)
+		packages.Modrinth(file)
+	}
+	for _, file := range indexFiles {
+		fmt.Println("已有" + file)
+		packages.Modrinth(file)
+	}
+}
 
 func main() {
 	if gitversion == "" {
@@ -27,6 +51,9 @@ func main() {
 	}
 	instFile := "inst.json"
 	var config core.InstConfig
+	fmt.Println("AutoInstall-" + gitversion + " https://github.com/autoinst/AutoInstall")
+	fmt.Println("正在扫描可用的整合包...")
+	Search()
 	if _, err := os.Stat(instFile); err == nil {
 		data, err := os.ReadFile(instFile)
 		if err != nil {
@@ -38,7 +65,6 @@ func main() {
 			log.Println("无法解析 inst.json 文件:", err)
 			return
 		}
-		fmt.Println("AutoInstall-" + gitversion + " https://github.com/autoinst/AutoInstall")
 		fmt.Println("准备安装:")
 		fmt.Printf("Minecraft版本: %s\n", config.Version)
 		if config.Loader != "vanilla" {
@@ -59,7 +85,7 @@ func main() {
 		}
 		os.MkdirAll(".autoinst/cache", os.ModePerm)
 		if config.Loader == "neoforge" {
-			packages.NeoForgeB(core.InstConfig{})
+			packages.NeoForgeB(core.InstConfig{}, simpfun)
 		}
 		if config.Loader == "forge" {
 			packages.ForgeB(config, simpfun)
