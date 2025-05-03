@@ -141,7 +141,7 @@ func Modrinth(file string) {
 		}
 		for _, downloadURL := range file.Downloads {
 			fmt.Println("下载链接:", downloadURL)
-			err := core.DownloadFile(filePath, downloadURL)
+			err := core.DownloadFile(downloadURL, filePath)
 			if err != nil {
 				panic(err)
 			}
