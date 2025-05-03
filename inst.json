@@ -1,7 +1,7 @@
 {
     "version": "1.21.1",
-    "loader": "vanilla",
-    "loaderVersion": "1.0.0",
+    "loader": "neoforge",
+    "loaderVersion": "21.1.123",
     "download": "bmclapi",
     "maxconnections": 10
 }

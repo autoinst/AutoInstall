@@ -11,10 +11,18 @@ import (
 
 func NeoForgeB(config core.InstConfig, simpfun bool) {
 	var installerURL string
-	installerURL = fmt.Sprintf(
-		"https://bmclapi2.bangbang93.com/maven/net/neoforged/neoforge/%s/neoforge-%s-installer.jar",
-		config.LoaderVersion, config.LoaderVersion,
-	)
+	if config.Download == "bmclapi" {
+		installerURL = fmt.Sprintf(
+			"https://bmclapi2.bangbang93.com/maven/net/neoforged/neoforge/%s/neoforge-%s-installer.jar",
+			config.LoaderVersion, config.LoaderVersion,
+		)
+	} else {
+		// 这里替换为官方源的URL，如果存在
+		installerURL = fmt.Sprintf(
+			"https://bmclapi2.bangbang93.com/maven/net/neoforged/neoforge/%s/neoforge-%s-installer.jar",
+			config.LoaderVersion, config.LoaderVersion,
+		)
+	}
 
 	installerPath := filepath.Join("./.autoinst/cache", fmt.Sprintf("neoforge-%s-installer.jar", config.LoaderVersion))
 	fmt.Println("当前为 neoforge 加载器，正在下载:", installerURL)

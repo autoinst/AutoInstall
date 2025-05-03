@@ -86,7 +86,7 @@ func main() {
 		}
 
 		if config.Loader == "neoforge" {
-			packages.NeoForgeB(core.InstConfig{}, simpfun)
+			packages.NeoForgeB(config, simpfun)
 		}
 		if config.Loader == "forge" {
 			packages.ForgeB(config, simpfun)
