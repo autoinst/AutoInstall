@@ -106,52 +106,31 @@ func Modrinth(file string) {
 		panic(err)
 	}
 
-	// 安装 NeoForge
-	if modrinthIndex.Dependencies.NeoForge != "" {
-		fmt.Println("开始安装 NeoForge")
-		config := core.InstConfig{
-			Version:       modrinthIndex.Dependencies.Minecraft,
-			Loader:        "neoforge",
-			LoaderVersion: modrinthIndex.Dependencies.NeoForge,
-			Download:      "bmclapi",
-		}
-		NeoForgeB(config, simpfun)
-	}
-	// 安装 Forge
-	if modrinthIndex.Dependencies.Forge != "" {
-		fmt.Println("开始安装 Forge")
-		config := core.InstConfig{
-			Version:       modrinthIndex.Dependencies.Minecraft,
-			Loader:        "forge",
-			LoaderVersion: modrinthIndex.Dependencies.Forge,
-			Download:      "bmclapi",
-		}
-		ForgeB(config, simpfun)
-	}
-	// 安装 Fabric
-	if modrinthIndex.Dependencies.Fabric != "" {
-		fmt.Println("开始安装 Fabric")
-		config := core.InstConfig{
-			Version:       modrinthIndex.Dependencies.Minecraft,
-			Loader:        "fabric",
-			LoaderVersion: modrinthIndex.Dependencies.Fabric,
-			Download:      "bmclapi",
-		}
-		FabricB(config, simpfun)
+	// 创建 inst.json 文件
+	instConfig := core.InstConfig{
+		Version:  modrinthIndex.Dependencies.Minecraft,
+		Download: "bmclapi", // 默认 bmclapi
 	}
 
-	for _, file := range modrinthIndex.Files {
-		filePath := filepath.Join("./", file.Path)
-		if err := os.MkdirAll(filepath.Dir(filePath), os.ModePerm); err != nil {
-			panic(err)
-		}
-		for _, downloadURL := range file.Downloads {
-			err := core.DownloadFile(filePath, downloadURL)
-			if err != nil {
-				panic(err)
-			}
-		}
+	if modrinthIndex.Dependencies.NeoForge != "" {
+		instConfig.Loader = "neoforge"
+		instConfig.LoaderVersion = modrinthIndex.Dependencies.NeoForge
+	} else if modrinthIndex.Dependencies.Forge != "" {
+		instConfig.Loader = "forge"
+		instConfig.LoaderVersion = modrinthIndex.Dependencies.Forge
+	} else if modrinthIndex.Dependencies.Fabric != "" {
+		instConfig.Loader = "fabric"
+		instConfig.LoaderVersion = modrinthIndex.Dependencies.Fabric
 	}
-	_ = os.Remove(indexFile.Name())
-	os.Exit(0)
+
+	// 写入 inst.json 文件
+	jsonData, err := json.MarshalIndent(instConfig, "", "  ")
+	if err != nil {
+		panic(err)
+	}
+
+	err = os.WriteFile("inst.json", jsonData, 0777)
+	if err != nil {
+		panic(err)
+	}
 }
