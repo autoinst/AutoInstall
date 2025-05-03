@@ -16,8 +16,9 @@ import (
 
 type ModrinthIndex struct {
 	Files []struct {
-		Path      string   `json:"path"`
-		Downloads []string `json:"downloads"`
+		Path      string            `json:"path"`
+		Env       map[string]string `json:"env"`
+		Downloads []string          `json:"downloads"`
 	} `json:"files"`
 	Dependencies struct {
 		Minecraft string `json:"minecraft"`
@@ -137,7 +138,7 @@ func Modrinth(file string) {
 	}
 
 	var wg sync.WaitGroup
-	maxConcurrency := 16 // 默认最大并发数
+	maxConcurrency := 24 // 默认最大并发数
 
 	semaphore := make(chan struct{}, maxConcurrency)
 	var errChan = make(chan error, len(modrinthIndex.Files))
@@ -147,13 +148,20 @@ func Modrinth(file string) {
 		semaphore <- struct{}{} // 获取信号量
 
 		go func(file struct {
-			Path      string   `json:"path"`
-			Downloads []string `json:"downloads"`
+			Path      string            `json:"path"`
+			Env       map[string]string `json:"env"`
+			Downloads []string          `json:"downloads"`
 		}) {
 			defer func() {
 				<-semaphore // 释放信号量
 				wg.Done()
 			}()
+			// 检查 env 中的 server 值
+			if envVal, ok := file.Env["server"]; ok {
+				if envVal != "required" {
+					return
+				}
+			}
 			filePath := filepath.Join(file.Path)
 			if err := os.MkdirAll(filepath.Dir(filePath), os.ModePerm); err != nil {
 				errChan <- err
