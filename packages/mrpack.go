@@ -135,11 +135,12 @@ func Modrinth(file string) {
 		panic(err)
 	}
 	for _, file := range modrinthIndex.Files {
-		filePath := filepath.Join("./", file.Path)
+		filePath := filepath.Join(file.Path)
 		if err := os.MkdirAll(filepath.Dir(filePath), os.ModePerm); err != nil {
 			panic(err)
 		}
 		for _, downloadURL := range file.Downloads {
+			fmt.Println("下载链接:", downloadURL)
 			err := core.DownloadFile(filePath, downloadURL)
 			if err != nil {
 				panic(err)
