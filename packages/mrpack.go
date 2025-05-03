@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/autoinst/AutoInstall/core"
 )
@@ -134,18 +135,50 @@ func Modrinth(file string) {
 	if err != nil {
 		panic(err)
 	}
+
+	var wg sync.WaitGroup
+	maxConcurrency := 16 // 默认最大并发数
+
+	semaphore := make(chan struct{}, maxConcurrency)
+	var errChan = make(chan error, len(modrinthIndex.Files))
+
 	for _, file := range modrinthIndex.Files {
-		filePath := filepath.Join(file.Path)
-		if err := os.MkdirAll(filepath.Dir(filePath), os.ModePerm); err != nil {
+		wg.Add(1)
+		semaphore <- struct{}{} // 获取信号量
+
+		go func(file struct {
+			Path      string   `json:"path"`
+			Downloads []string `json:"downloads"`
+		}) {
+			defer func() {
+				<-semaphore // 释放信号量
+				wg.Done()
+			}()
+			filePath := filepath.Join(file.Path)
+			if err := os.MkdirAll(filepath.Dir(filePath), os.ModePerm); err != nil {
+				errChan <- err
+				return
+			}
+			for _, downloadURL := range file.Downloads {
+				fmt.Println("下载链接:", downloadURL)
+				err := core.DownloadFile(downloadURL, filePath)
+				if err != nil {
+					errChan <- err
+					return
+				}
+			}
+		}(file)
+	}
+
+	wg.Wait()
+	close(errChan)
+
+	// 检查是否有错误发生
+	for err := range errChan {
+		if err != nil {
 			panic(err)
 		}
-		for _, downloadURL := range file.Downloads {
-			fmt.Println("下载链接:", downloadURL)
-			err := core.DownloadFile(downloadURL, filePath)
-			if err != nil {
-				panic(err)
-			}
-		}
 	}
+
 	_ = os.Remove(indexFile.Name())
 }

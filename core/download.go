@@ -56,9 +56,7 @@ func DownloadFile(url, filePath string) error {
 			req.Header.Set("Range", "bytes="+strconv.FormatInt(start, 10)+"-")
 		}
 
-		client := &http.Client{
-			Timeout: 10 * time.Second, // 设置超时
-		}
+		client := &http.Client{}
 		resp, err := client.Do(req)
 
 		if err != nil {
