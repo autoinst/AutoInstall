@@ -15,14 +15,34 @@ import (
 
 func SPCInstall(file string) {
 	if strings.HasSuffix(file, ".zip") {
-		err := UnzipModpack(file, "./")
+		zipFile, err := zip.OpenReader(file)
 		if err != nil {
-			fmt.Println("解压 Modpack 失败:", err)
-			return
+			panic(err)
 		}
-		fmt.Println("Modpack 解压完成。")
-	} else {
-		fmt.Println("不支持的文件格式。")
+		defer zipFile.Close()
+		for _, f := range zipFile.File {
+			filePath := filepath.Join("./", f.Name)
+			if f.FileInfo().IsDir() {
+				_ = os.MkdirAll(filePath, os.ModePerm)
+				continue
+			}
+			if err := os.MkdirAll(filepath.Dir(filePath), os.ModePerm); err != nil {
+				panic(err)
+			}
+			dstFile, err := os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, f.Mode())
+			if err != nil {
+				panic(err)
+			}
+			file, err := f.Open()
+			if err != nil {
+				panic(err)
+			}
+			if _, err := io.Copy(dstFile, file); err != nil {
+				panic(err)
+			}
+			dstFile.Close()
+			file.Close()
+		}
 	}
 	if _, err := os.Stat("variables.txt"); os.IsNotExist(err) {
 		fmt.Println("错误：当前目录下缺少 variables.txt 文件。")
