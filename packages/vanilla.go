@@ -13,7 +13,11 @@ func DownloadServerJar(version, loader, librariesDir string) error {
 	var serverFileName string
 
 	if loader == "forge" {
-		serverFileName = fmt.Sprintf("server-%s-bundled.jar", version)
+		if version >= "1.20.4" {
+			serverFileName = fmt.Sprintf("server-%s-bundled.jar", version)
+		} else {
+			serverFileName = fmt.Sprintf("server-%s.jar", version)
+		}
 	} else if loader == "fabric" || loader == "vanilla" {
 		serverFileName = "server.jar"
 	} else {
@@ -41,8 +45,6 @@ func DownloadServerJar(version, loader, librariesDir string) error {
 		var symlinkPath string
 		if version < "1.16.5" {
 			symlinkPath = fmt.Sprintf("./minecraft_server.%s.jar", version)
-		} else {
-			symlinkPath = filepath.Join(librariesDir, "net", "minecraft", "server", version, fmt.Sprintf("server-%s.jar", version))
 		}
 
 		if err := os.Symlink(serverPath, symlinkPath); err != nil {
