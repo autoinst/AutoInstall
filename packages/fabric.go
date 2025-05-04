@@ -25,7 +25,7 @@ func FabricB(config core.InstConfig, simpfun bool) {
 		return
 	}
 	fmt.Println("服务端下载完成")
-	if err := core.RunInstaller(installerPath, config.Loader, config.Version, config.LoaderVersion, config.Download); err != nil {
+	if err := core.RunInstaller(installerPath, config.Loader, config.Version, config.LoaderVersion, config.Download, simpfun); err != nil {
 		log.Println("运行安装器失败:", err)
 		return
 	}

@@ -51,7 +51,7 @@ func NeoForgeB(config core.InstConfig, simpfun bool) {
 	}
 
 	fmt.Println("库文件下载完成")
-	if err := core.RunInstaller(installerPath, config.Loader, config.Version, config.LoaderVersion, config.Download); err != nil {
+	if err := core.RunInstaller(installerPath, config.Loader, config.Version, config.LoaderVersion, config.Download, simpfun); err != nil {
 		log.Println("运行安装器失败:", err)
 	} else {
 		universalJar := fmt.Sprintf("neoforge-%s-%s-universal.jar", config.Version, config.LoaderVersion)

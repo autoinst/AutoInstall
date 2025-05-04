@@ -22,6 +22,11 @@ func SPCInstall(file string) {
 		defer zipFile.Close()
 		for _, f := range zipFile.File {
 			filePath := filepath.Join("./", f.Name)
+			// 忽略 start.sh 和 run.sh 脚本
+			if f.Name == "start.sh" || f.Name == "run.sh" {
+				fmt.Printf("跳过文件: %s\n", f.Name)
+				continue
+			}
 			if f.FileInfo().IsDir() {
 				_ = os.MkdirAll(filePath, os.ModePerm)
 				continue
@@ -70,49 +75,6 @@ func SPCInstall(file string) {
 		fmt.Println("写入 inst.json 文件失败:", err)
 		return
 	}
-}
-
-func UnzipModpack(src string, dest string) error {
-	r, err := zip.OpenReader(src)
-	if err != nil {
-		return err
-	}
-	defer r.Close()
-
-	for _, f := range r.File {
-		rc, err := f.Open()
-		if err != nil {
-			return err
-		}
-		defer rc.Close()
-
-		fpath := filepath.Join(dest, f.Name)
-		if f.FileInfo().IsDir() {
-			os.MkdirAll(fpath, os.ModePerm)
-		} else {
-			var fdir string
-			if lastIndex := strings.LastIndex(fpath, string(os.PathSeparator)); lastIndex > -1 {
-				fdir = fpath[:lastIndex]
-			}
-
-			err = os.MkdirAll(fdir, os.ModePerm)
-			if err != nil {
-				return err
-			}
-			f, err := os.OpenFile(
-				fpath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, f.Mode())
-			if err != nil {
-				return err
-			}
-			defer f.Close()
-
-			_, err = io.Copy(f, rc)
-			if err != nil {
-				return err
-			}
-		}
-	}
-	return nil
 }
 
 // readVariables 读取 variables.txt 文件并解析为 map

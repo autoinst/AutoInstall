@@ -10,37 +10,43 @@ import (
 	"strings"
 )
 
-func RunInstaller(installerPath string, loader string, version string, loaderVersion string, Download string) error {
+func RunInstaller(installerPath string, loader string, version string, loaderVersion string, Download string, simpfun bool) error {
+	var javaPath string
+	if simpfun {
+		javaPath = "/usr/bin/jdk/jdk1.8.0_361/bin/java"
+	} else {
+		javaPath = "java"
+	}
 	var cmd *exec.Cmd
 	if Download == "bmclapi" {
 		if loader == "forge" {
-			cmd = exec.Command("java", "-jar", installerPath, "--installServer", "--mirror", "https://bmclapi2.bangbang93.com/maven/")
+			cmd = exec.Command(javaPath, "-jar", installerPath, "--installServer", "--mirror", "https://bmclapi2.bangbang93.com/maven/")
 		} else if loader == "neoforge" {
-			cmd = exec.Command("java", "-jar", installerPath, "--installServer", "--mirror", "https://bmclapi2.bangbang93.com/maven/")
+			cmd = exec.Command(javaPath, "-jar", installerPath, "--installServer", "--mirror", "https://bmclapi2.bangbang93.com/maven/")
 		} else if loader == "fabric" {
 			cmd = exec.Command(
-				"java", "-jar", installerPath, "server",
+				javaPath, "-jar", installerPath, "server",
 				"-mavenurl", "https://bmclapi2.bangbang93.com/maven/",
 				"-metaurl", "https://bmclapi2.bangbang93.com/fabric-meta/",
 				"-mcversion", version,
 				"-loader", loaderVersion,
 			)
 		} else {
-			cmd = exec.Command("java", "-jar", installerPath)
+			cmd = exec.Command(javaPath, "-jar", installerPath)
 		}
 	} else {
 		if loader == "forge" {
-			cmd = exec.Command("java", "-jar", installerPath, "--installServer")
+			cmd = exec.Command(javaPath, "-jar", installerPath, "--installServer")
 		} else if loader == "neoforge" {
-			cmd = exec.Command("java", "-jar", installerPath, "--installServer")
+			cmd = exec.Command(javaPath, "-jar", installerPath, "--installServer")
 		} else if loader == "fabric" {
 			cmd = exec.Command(
-				"java", "-jar", installerPath, "server",
+				javaPath, "-jar", installerPath, "server",
 				"-mcversion", version,
 				"-loader", loaderVersion,
 			)
 		} else {
-			cmd = exec.Command("java", "-jar", installerPath)
+			cmd = exec.Command(javaPath, "-jar", installerPath)
 		}
 	}
 
