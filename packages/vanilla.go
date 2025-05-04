@@ -39,18 +39,5 @@ func DownloadServerJar(version, loader, librariesDir string) error {
 		return fmt.Errorf("无法下载服务端文件 %s: %v", serverPath, err)
 	}
 	fmt.Println("下载完成 Minecraft 服务端:", serverPath)
-
-	// 感谢SBforge改得到处都是
-	if loader == "forge" {
-		var symlinkPath string
-		if version < "1.16.5" {
-			symlinkPath = fmt.Sprintf("./minecraft_server.%s.jar", version)
-		}
-
-		if err := os.Symlink(serverPath, symlinkPath); err != nil {
-			return fmt.Errorf("无法创建符号链接 %s -> %s: %v", symlinkPath, serverPath, err)
-		}
-		fmt.Println("符号链接已创建:", symlinkPath, "->", serverPath)
-	}
 	return nil
 }
