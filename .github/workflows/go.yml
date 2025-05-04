@@ -44,7 +44,7 @@ jobs:
 
       - name: Get version
         id: get_version
-        run: echo "VERSION=${GITHUB_REF/refs\/tags\//}" >> $GITHUB_OUTPUT
+        run: chmod 777 dist/${{ env.BUILD_NAME }} && ./dist/${{ env.BUILD_NAME }} --version
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
