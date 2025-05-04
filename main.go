@@ -22,7 +22,16 @@ func Search() {
 	if err != nil {
 		return
 	}
-	if len(mrpackFiles) == 0 && len(indexFiles) == 0 {
+	zipFiles, err := filepath.Glob("modpack.zip")
+	if err != nil {
+		return
+	}
+	variablesFiles, err := filepath.Glob("variables.txt")
+	if err != nil {
+		return
+	}
+
+	if len(mrpackFiles) == 0 && len(indexFiles) == 0 && len(zipFiles) == 0 && len(variablesFiles) == 0 {
 		fmt.Println("未找到Modrinth整合包")
 		return
 	}
@@ -33,6 +42,15 @@ func Search() {
 	for _, file := range indexFiles {
 		fmt.Println("已有" + file)
 		packages.Modrinth(file)
+	}
+	if len(zipFiles) > 0 && len(variablesFiles) > 0 {
+		fmt.Println("发现其他整合包")
+		for _, zipFile := range zipFiles {
+			packages.SPCInstall(zipFile)
+		}
+		for _, variablesFile := range variablesFiles {
+			packages.SPCInstall(variablesFile)
+		}
 	}
 }
 
