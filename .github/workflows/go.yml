@@ -42,10 +42,6 @@ jobs:
       - name: Build
         run: bash ./build.sh
 
-      - name: Get version
-        id: get_version
-        run: chmod 777 dist/${{ env.BUILD_NAME }} && ./dist/${{ env.BUILD_NAME }} --version
-
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:
