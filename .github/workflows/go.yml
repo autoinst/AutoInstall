@@ -47,3 +47,15 @@ jobs:
         with:
           name: ${{ env.BUILD_NAME }}
           path: dist/${{ env.BUILD_NAME }}
+          
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: beta
+          name: "Beta Release"
+          body: |
+            Beta release generated from commit ${{ github.sha }}
+          prerelease: true
+          files: dist/${{ env.BUILD_NAME }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
