@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/autoinst/AutoInstall/core"
-	"github.com/autoinst/AutoInstall/packages"
+	"github.com/autoinst/AutoInstall/pkg"
 )
 
 var gitversion string
@@ -37,15 +37,15 @@ func Search() {
 	}
 	for _, file := range mrpackFiles {
 		fmt.Println("已有" + file)
-		packages.Modrinth(file)
+		pkg.Modrinth(file)
 	}
 	for _, file := range indexFiles {
 		fmt.Println("已有" + file)
-		packages.Modrinth(file)
+		pkg.Modrinth(file)
 	}
 	for _, zipFile := range zipFiles {
 		fmt.Println("发现其他整合包")
-		packages.SPCInstall(zipFile)
+		pkg.SPCInstall(zipFile)
 	}
 }
 
@@ -99,17 +99,17 @@ func main() {
 		}
 
 		if config.Loader == "neoforge" {
-			packages.NeoForgeB(config, simpfun)
+			pkg.NeoForgeB(config, simpfun)
 		}
 		if config.Loader == "forge" {
-			packages.ForgeB(config, simpfun)
+			pkg.ForgeB(config, simpfun)
 		}
 		if config.Loader == "fabric" {
-			packages.FabricB(config, simpfun)
+			pkg.FabricB(config, simpfun)
 		}
 		if config.Loader == "vanilla" {
 			librariesDir := "./libraries"
-			if err := packages.DownloadServerJar(config.Version, config.Loader, librariesDir); err != nil {
+			if err := pkg.DownloadServerJar(config.Version, config.Loader, librariesDir); err != nil {
 				log.Println("下载mc服务端失败:", err)
 				return
 			}
