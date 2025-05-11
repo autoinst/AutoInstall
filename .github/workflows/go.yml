@@ -44,7 +44,6 @@ jobs:
   release:
     needs: build
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -62,6 +61,6 @@ jobs:
           body: |
             Auto-generated beta release from master @ ${{ github.sha }}
           prerelease: true
-          files: dist/
+          files: dist/**/*
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.BETA }}
