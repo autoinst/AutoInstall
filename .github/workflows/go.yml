@@ -63,6 +63,8 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: dist/
+      - name: test
+        run: ls dist
 
       - name: Create or Update GitHub Release (beta)
         uses: softprops/action-gh-release@v2
