@@ -59,24 +59,20 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Delete old beta tag (if exists)
-        run: |
-          git push origin :refs/tags/beta || true
-          git tag -f beta
-          git push origin beta --force
-
       - name: Download all build artifacts
         uses: actions/download-artifact@v4
         with:
           path: dist/
 
-      - name: Publish GitHub Release (to tag `beta`)
+      - name: Create or Update GitHub Release (beta)
         uses: softprops/action-gh-release@v2
         with:
           tag_name: beta
           name: Beta Release
           body: |
-            Beta release generated from commit ${{ github.sha }}
+            Auto-generated beta release from master @ ${{ github.sha }}
           prerelease: true
+          overwrite: true  # 这确保文件会被覆盖更新
           files: dist/${{ env.BUILD_NAME }}
-          token: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
