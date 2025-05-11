@@ -72,7 +72,6 @@ jobs:
           body: |
             Auto-generated beta release from master @ ${{ github.sha }}
           prerelease: true
-          overwrite: true  # 这确保文件会被覆盖更新
           files: dist/${{ env.BUILD_NAME }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
