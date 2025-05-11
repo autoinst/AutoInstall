@@ -1,6 +1,3 @@
-# This workflow will build a golang project
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
-
 name: Release Build
 
 on:
@@ -13,12 +10,10 @@ jobs:
   build:
     strategy:
       matrix:
-        # Include amd64 on all platforms.
         goos: [ windows, linux ]
         goarch: [ amd64, 386 ]
         goamd64: [ v1 ]
         exclude:
-          # Exclude i386 on darwin and dragonfly.
           - goarch: 386
             goos: dragonfly
 
@@ -47,12 +42,33 @@ jobs:
         with:
           name: ${{ env.BUILD_NAME }}
           path: dist/${{ env.BUILD_NAME }}
-          
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        goos: [ windows, linux ]
+        goarch: [ amd64, 386 ]
+        goamd64: [ v1 ]
+        exclude:
+          - goarch: 386
+            goos: dragonfly
+    env:
+      BUILD_NAME: AutoInstall-${{ matrix.goos }}-${{ matrix.goarch }}-${{ matrix.goamd64 }}${{ matrix.goos == 'windows' && '.exe' || '' }}
+
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.BUILD_NAME }}
+          path: dist/
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: beta
           name: "Beta Release"
+          tag_name: beta
           body: |
             Beta release generated from commit ${{ github.sha }}
           prerelease: true
