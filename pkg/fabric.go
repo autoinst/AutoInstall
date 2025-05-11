@@ -9,7 +9,7 @@ import (
 	"github.com/autoinst/AutoInstall/core"
 )
 
-func FabricB(config core.InstConfig, simpfun bool) {
+func FabricB(config core.InstConfig, simpfun bool, mise bool) {
 	var installerURL string
 	installerURL = "https://maven.fabricmc.net/net/fabricmc/fabric-installer/1.0.1/fabric-installer-1.0.1.jar"
 	installerPath := filepath.Join("./.autoinst/cache", "fabric-installer-1.0.1.jar")

@@ -83,7 +83,7 @@ func Modrinth(file string) {
 		panic(fmt.Sprintf("移动 overrides 文件失败: %v", err))
 	}
 	_ = os.RemoveAll(overridesPath)
-	javaPath, simpfun := core.FindJava()
+	javaPath, simpfun, mise := core.FindJava()
 	if javaPath == "" {
 		log.Println("未找到 Java，请确保已安装 Java 并设置 PATH。")
 		return
@@ -91,6 +91,9 @@ func Modrinth(file string) {
 	fmt.Println("找到 Java 运行环境:", javaPath)
 	if simpfun {
 		fmt.Println("已启用 simpfun 环境")
+	}
+	if mise {
+		fmt.Println("启用 mise")
 	}
 	indexPath := filepath.Join("./", "modrinth.index.json")
 	indexFile, err := os.Open(indexPath)

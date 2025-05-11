@@ -9,7 +9,7 @@ import (
 	"github.com/autoinst/AutoInstall/core"
 )
 
-func NeoForgeB(config core.InstConfig, simpfun bool) {
+func NeoForgeB(config core.InstConfig, simpfun bool, mise bool) {
 	var installerURL string
 	if config.Download == "bmclapi" {
 		installerURL = fmt.Sprintf(

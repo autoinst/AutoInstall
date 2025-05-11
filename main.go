@@ -102,13 +102,13 @@ func main() {
 		}
 
 		if config.Loader == "neoforge" {
-			pkg.NeoForgeB(config, simpfun)
+			pkg.NeoForgeB(config, simpfun, mise)
 		}
 		if config.Loader == "forge" {
-			pkg.ForgeB(config, simpfun)
+			pkg.ForgeB(config, simpfun, mise)
 		}
 		if config.Loader == "fabric" {
-			pkg.FabricB(config, simpfun)
+			pkg.FabricB(config, simpfun, mise)
 		}
 		if config.Loader == "vanilla" {
 			librariesDir := "./libraries"
