@@ -74,11 +74,23 @@ func RunInstaller(installerPath string, loader string, version string, loaderVer
 	return nil
 }
 
-func FindJava() (string, bool) {
+func FindJava() (string, bool, bool) {
+	simpfun := false
+	mise := false
 	if runtime.GOOS == "linux" {
-		simpfun := "/usr/bin/jdk/jdk1.8.0_361/bin/java"
-		if _, err := os.Stat(simpfun); err == nil {
-			return simpfun, true
+		if _, err := os.Stat("/home/container/.aio"); err == nil {
+			simpfun = true
+		}
+		javaPath := "/usr/bin/jdk/jdk1.8.0_361/bin/java"
+		if _, err := os.Stat(javaPath); err == nil {
+			simpfun = true
+		}
+	}
+
+	if simpfun {
+		cmd := exec.Command("mise", "-v")
+		if err := cmd.Run(); err == nil {
+			mise = true
 		}
 	}
 
@@ -86,15 +98,15 @@ func FindJava() (string, bool) {
 	if javaHome != "" {
 		javaPath := filepath.Join(javaHome, "bin", "java")
 		if _, err := os.Stat(javaPath); err == nil {
-			return javaPath, false
+			return javaPath, simpfun, mise
 		}
 	}
 
 	cmd := exec.Command("java", "-version")
 	output, err := cmd.CombinedOutput()
 	if err == nil && strings.Contains(string(output), "version") {
-		return "java", false
+		return "java", simpfun, mise
 	}
 
-	return "", false
+	return "", simpfun, mise
 }

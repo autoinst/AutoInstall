@@ -88,7 +88,7 @@ func main() {
 		}
 		fmt.Printf("下载源: %s\n", config.Download)
 
-		javaPath, simpfun := core.FindJava()
+		javaPath, simpfun, mise := core.FindJava()
 		if javaPath == "" {
 			log.Println("未找到 Java，请确保已安装 Java 并设置 PATH。")
 			return
@@ -96,6 +96,9 @@ func main() {
 		fmt.Println("找到 Java 运行环境:", javaPath)
 		if simpfun {
 			fmt.Println("已启用 simpfun 环境")
+		}
+		if mise {
+			fmt.Println("启用mise")
 		}
 
 		if config.Loader == "neoforge" {
