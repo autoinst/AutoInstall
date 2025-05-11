@@ -42,7 +42,9 @@ jobs:
           path: dist/${{ env.BUILD_NAME }}
 
   release:
+    needs: build
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -51,6 +53,8 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: dist/
+      - name: test
+        run: ls dist
 
       - name: Create or Update GitHub Release (beta)
         uses: softprops/action-gh-release@v2
@@ -60,6 +64,6 @@ jobs:
           body: |
             Auto-generated beta release from master @ ${{ github.sha }}
           prerelease: true
-          files: dist/
+          files: dist/${{ env.BUILD_NAME }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
