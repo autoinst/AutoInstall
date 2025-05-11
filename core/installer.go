@@ -110,3 +110,30 @@ func FindJava() (string, bool, bool) {
 
 	return "", simpfun, mise
 }
+
+func RunScript(Version string, Loader string, LoaderVersion string, simpfun bool, mise bool) {
+	var scriptContent string
+	if Loader == "forge" {
+		scriptContent = fmt.Sprintf("java @libraries/net/minecraftforge/forge/%s-%s/unix_args.txt \"$@\"", Version, LoaderVersion)
+	} else if Loader == "neoforge" {
+		scriptContent = fmt.Sprintf("java @libraries/net/neoforged/neoforge/%s/unix_args.txt \"$@\"", LoaderVersion)
+	} else if Loader == "fabric" {
+		scriptContent = "java -jar fabric-server-launch.jar"
+	}
+	file, err := os.Create("run.sh")
+	if err != nil {
+		fmt.Println("创建文件失败:", err)
+		return
+	}
+	defer file.Close()
+	_, err = file.WriteString(scriptContent)
+	if err != nil {
+		fmt.Println("写入文件失败:", err)
+		return
+	}
+	err = os.Chmod("run.sh", 0777)
+	if err != nil {
+		fmt.Println("修改权限失败:", err)
+		return
+	}
+}
