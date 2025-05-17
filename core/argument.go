@@ -1,3 +1,3 @@
-packages core
+package core
 func Argument(){
 }
