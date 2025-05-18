@@ -112,6 +112,12 @@ func FindJava() (string, bool, bool) {
 }
 
 func RunScript(Version string, Loader string, LoaderVersion string, simpfun bool, mise bool) {
+	if _, err := os.Stat("run.sh"); err == nil {
+		if err := os.Remove("run.sh"); err != nil {
+			fmt.Println("删除旧的 run.sh 失败:", err)
+			return
+		}
+	}
 	var scriptContent string
 	if Loader == "forge" {
 		scriptContent = fmt.Sprintf("java @libraries/net/minecraftforge/forge/%s-%s/unix_args.txt \"$@\"", Version, LoaderVersion)

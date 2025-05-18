@@ -9,8 +9,8 @@ jobs:
   build:
     strategy:
       matrix:
-        goos: [ windows, linux ]
-        goarch: [ amd64, 386 ]
+        goos: [ linux ]
+        goarch: [ amd64, 386 , arm64 , arm]
         goamd64: [ v1 ]
         exclude:
           - goarch: 386
