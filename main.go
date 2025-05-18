@@ -53,15 +53,7 @@ func main() {
 	if gitversion == "" {
 		gitversion = "NaN"
 	}
-	if len(os.Args) > 1 && os.Args[1] == "--help" {
-		fmt.Println("--help 获取帮助")
-		fmt.Println("--version 获取版本")
-		return
-	}
-	if len(os.Args) > 1 && os.Args[1] == "--version" {
-		fmt.Println("AutoInstall-" + gitversion)
-		return
-	}
+	core.Argument(gitversion)
 	os.MkdirAll(".autoinst/cache", os.ModePerm)
 	instFile := "inst.json"
 	var config core.InstConfig

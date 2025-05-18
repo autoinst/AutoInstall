@@ -4,6 +4,8 @@
 ![gh-actions](https://img.shields.io/github/actions/workflow/status/autoinst/AutoInstall/go.yml)
 ![gh-lc](https://img.shields.io/github/last-commit/autoinst/AutoInstall)
 ![GitHub License](https://img.shields.io/github/license/autoinst/AutoInstall)
+![GitHub Release](https://img.shields.io/github/v/release/autoinst/AutoInstall)
+
 
 简单、快速和多功能的Minecraft服务端安装器  
 
