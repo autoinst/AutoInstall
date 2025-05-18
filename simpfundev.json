@@ -199,7 +199,7 @@
     {
         "file": "/inst.json",
         "name": "安装器配置",
-        "notice": "安装器基本配置，删除run.sh重启将重新安装",
+        "notice": "安装器基本配置，删除run.sh重启将重新安装。若整合包modrinth则改名modpack.mrpack,spc生成的则modpack.zip",
         "exps": [
             {
                 "type": "string",
