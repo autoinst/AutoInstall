@@ -10,10 +10,21 @@ import (
 	"strings"
 )
 
-func RunInstaller(installerPath string, loader string, version string, loaderVersion string, Download string, simpfun bool) error {
+func RunInstaller(installerPath string, loader string, version string, loaderVersion string, Download string, simpfun bool, mise bool) error {
 	var javaPath string
 	if simpfun {
-		javaPath = "/usr/bin/jdk/jdk1.8.0_361/bin/java"
+		if mise {
+			if version < "1.17" {
+				exec.Command("mise use -g java@zulu-8.86.0.25")
+			} else if version >= "1.17" && version <= "1.20.3" {
+				exec.Command("mise use -g java@zulu-17.58.21")
+			} else {
+				exec.Command("mise use -g java@zulu-21.42.19")
+			}
+			javaPath = "java"
+		} else {
+			javaPath = "/usr/bin/jdk/jdk1.8.0_361/bin/java"
+		}
 	} else {
 		javaPath = "java"
 	}
@@ -119,12 +130,71 @@ func RunScript(Version string, Loader string, LoaderVersion string, simpfun bool
 		}
 	}
 	var scriptContent string
-	if Loader == "forge" {
-		scriptContent = fmt.Sprintf("java @libraries/net/minecraftforge/forge/%s-%s/unix_args.txt \"$@\"", Version, LoaderVersion)
-	} else if Loader == "neoforge" {
-		scriptContent = fmt.Sprintf("java @libraries/net/neoforged/neoforge/%s/unix_args.txt \"$@\"", LoaderVersion)
-	} else if Loader == "fabric" {
-		scriptContent = "java -jar fabric-server-launch.jar"
+	var javaPath string
+	if simpfun {
+		if mise {
+			if Version < "1.17" {
+				exec.Command("mise use -g java@zulu-8.86.0.25")
+			} else if Version >= "1.17" && Version <= "1.20.3" {
+				exec.Command("mise use -g java@zulu-17.58.21")
+			} else {
+				exec.Command("mise use -g java@zulu-21.42.19")
+			}
+			javaPath = "java"
+			// 感谢aio镜像不支持
+			if _, err := os.Stat("server.properties"); os.IsNotExist(err) {
+				file, err := os.Create("server.properties")
+				if err != nil {
+					fmt.Println("创建 server.properties 失败:", err)
+				} else {
+					defer file.Close()
+				}
+				serverPort := os.Getenv("SERVER_PORT")
+				if serverPort == "" {
+					serverPort = "25565"
+				}
+				content := ""
+				exists := false
+				if data, err := os.ReadFile("server.properties"); err == nil {
+					lines := strings.Split(string(data), "\n")
+					for _, line := range lines {
+						if strings.HasPrefix(line, "server-ip=") || strings.HasPrefix(line, "enable-query=") {
+							exists = true
+							break
+						}
+					}
+				}
+				if !exists {
+					content = fmt.Sprintf("server-ip=0.0.0.0\nenable-query=%s\n", serverPort)
+				}
+				if _, err := file.WriteString(content); err != nil {
+					fmt.Println("写入 server.properties 失败:", err)
+				}
+			}
+		} else {
+			if Version < "1.17" {
+				javaPath = "/usr/bin/jdk/jdk1.8.0_361/bin/java"
+			} else if Version >= "1.17" && Version <= "1.20.3" {
+				javaPath = "/usr/bin/jdk/jdk-17.0.6/bin/java"
+			} else {
+				javaPath = "/usr/bin/jdk/jdk-21.0.2/bin/java"
+			}
+		}
+		if Loader == "forge" {
+			scriptContent = fmt.Sprintf(javaPath+" @libraries/net/minecraftforge/forge/%s-%s/unix_args.txt \"$@\"", Version, LoaderVersion)
+		} else if Loader == "neoforge" {
+			scriptContent = fmt.Sprintf(javaPath+" @libraries/net/neoforged/neoforge/%s/unix_args.txt \"$@\"", LoaderVersion)
+		} else if Loader == "fabric" {
+			scriptContent = javaPath + " -jar fabric-server-launch.jar"
+		}
+	} else {
+		if Loader == "forge" {
+			scriptContent = fmt.Sprintf("java @libraries/net/minecraftforge/forge/%s-%s/unix_args.txt \"$@\"", Version, LoaderVersion)
+		} else if Loader == "neoforge" {
+			scriptContent = fmt.Sprintf("java @libraries/net/neoforged/neoforge/%s/unix_args.txt \"$@\"", LoaderVersion)
+		} else if Loader == "fabric" {
+			scriptContent = "java -jar fabric-server-launch.jar"
+		}
 	}
 	file, err := os.Create("run.sh")
 	if err != nil {
