@@ -9,16 +9,17 @@ import (
 
 func Common(config core.InstConfig) {
 	javaPath, simpfun, mise := core.FindJava()
-	if javaPath == "" {
-		log.Println("未找到 Java，请确保已安装 Java 并设置 PATH。")
-		return
-	}
-	fmt.Println("找到 Java 运行环境:", javaPath)
 	if simpfun {
 		fmt.Println("已启用 simpfun 环境")
-	}
-	if mise {
-		fmt.Println("启用mise")
+		if mise {
+			fmt.Println("启用mise")
+		}
+	} else {
+		if javaPath == "" {
+			log.Println("未找到 Java，请确保已安装 Java 并设置 PATH。")
+			return
+		}
+		fmt.Println("找到 Java 运行环境:", javaPath)
 	}
 
 	if config.Loader == "neoforge" {
