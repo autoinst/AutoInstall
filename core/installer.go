@@ -14,12 +14,17 @@ func RunInstaller(installerPath string, loader string, version string, loaderVer
 	var javaPath string
 	if simpfun {
 		if mise {
+			var cmd *exec.Cmd
 			if version < "1.17" {
-				exec.Command("mise use -g java@zulu-8.86.0.25")
+				cmd = exec.Command("mise", "use", "-g", "java@zulu-8.86.0.25")
 			} else if version >= "1.17" && version <= "1.20.3" {
-				exec.Command("mise use -g java@zulu-17.58.21")
+				cmd = exec.Command("mise", "use", "-g", "java@zulu-17.58.21")
 			} else {
-				exec.Command("mise use -g java@zulu-21.42.19")
+				cmd = exec.Command("mise", "use", "-g", "java@zulu-21.42.19")
+			}
+			err := cmd.Run()
+			if err != nil {
+				fmt.Println("mise use failed:", err)
 			}
 			javaPath = "java"
 		} else {
