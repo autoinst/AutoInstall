@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 )
 
@@ -138,13 +139,6 @@ func RunScript(Version string, Loader string, LoaderVersion string, simpfun bool
 	var javaPath string
 	if simpfun {
 		if mise {
-			if Version < "1.17" {
-				exec.Command("mise use -g java@zulu-8.86.0.25")
-			} else if Version >= "1.17" && Version <= "1.20.3" {
-				exec.Command("mise use -g java@zulu-17.58.21")
-			} else {
-				exec.Command("mise use -g java@zulu-21.42.19")
-			}
 			javaPath = "java"
 			// 感谢aio镜像不支持
 			if _, err := os.Stat("server.properties"); os.IsNotExist(err) {
@@ -157,22 +151,30 @@ func RunScript(Version string, Loader string, LoaderVersion string, simpfun bool
 				serverPort := os.Getenv("SERVER_PORT")
 				if serverPort == "" {
 					serverPort = "25565"
+				} else if _, err := strconv.Atoi(serverPort); err != nil {
+					serverPort = "25565"
 				}
-				content := ""
-				exists := false
-				if data, err := os.ReadFile("server.properties"); err == nil {
+
+				props := make(map[string]string)
+				data, err := os.ReadFile("server.properties")
+				if err == nil {
 					lines := strings.Split(string(data), "\n")
 					for _, line := range lines {
-						if strings.HasPrefix(line, "server-ip=") || strings.HasPrefix(line, "enable-query=") {
-							exists = true
-							break
+						line = strings.TrimSpace(line)
+						if !strings.HasPrefix(line, "#") && strings.Contains(line, "=") {
+							parts := strings.SplitN(line, "=", 2)
+							props[parts[0]] = parts[1]
 						}
 					}
 				}
-				if !exists {
-					content = fmt.Sprintf("server-ip=0.0.0.0\nenable-query=%s\n", serverPort)
+				props["server-ip"] = "0.0.0.0"
+				props["query.port"] = serverPort
+				props["server-port"] = serverPort
+				var content strings.Builder
+				for k, v := range props {
+					content.WriteString(fmt.Sprintf("%s=%s\n", k, v))
 				}
-				if _, err := file.WriteString(content); err != nil {
+				if err := os.WriteFile("server.properties", []byte(content.String()), 0644); err != nil {
 					fmt.Println("写入 server.properties 失败:", err)
 				}
 			}
