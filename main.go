@@ -31,7 +31,9 @@ func Search() {
 		return
 	}
 
-	if len(mrpackFiles) == 0 && len(indexFiles) == 0 && len(zipFiles) == 0 && len(variablesFiles) == 0 {
+	allFiles := append(append(append(mrpackFiles, indexFiles...), zipFiles...), variablesFiles...)
+
+	if len(allFiles) == 0 {
 		fmt.Println("未找到整合包")
 		return
 	}
@@ -46,6 +48,17 @@ func Search() {
 	for _, zipFile := range zipFiles {
 		fmt.Println("发现其他整合包")
 		pkg.SPCInstall(zipFile)
+	}
+
+	// 如果只有其他文件，则使用第一个
+	if len(allFiles) == 1 {
+		fmt.Println("发现整合包: " + allFiles[0])
+		pkg.SPCInstall(allFiles[0])
+	} else if len(allFiles) > 1 {
+		fmt.Println("发现多个整合包，请手动指定")
+		for _, file := range allFiles {
+			fmt.Println("  " + file)
+		}
 	}
 }
 
