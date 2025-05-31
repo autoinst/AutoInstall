@@ -87,7 +87,7 @@ func normalDownload(url, filePath string, totalSize int64) error {
 		if start > 0 {
 			req.Header.Set("Range", "bytes="+strconv.FormatInt(start, 10)+"-")
 		}
-		req.Header.Set("User-Agent", "AutoInstall/"+gitversion)
+		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36 Edg/136.0.0.0 AutoInstall/"+gitversion)
 
 		client := &http.Client{}
 		resp, err := client.Do(req)
@@ -165,7 +165,7 @@ func chunkDownload(url, filePath string, totalSize int64, chunkSize int64) error
 
 		req, _ := http.NewRequest("GET", url, nil)
 		req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", downloaded, end))
-		req.Header.Set("User-Agent", "AutoInstall/"+gitversion)
+		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36 Edg/136.0.0.0 AutoInstall/"+gitversion)
 
 		resp, err := client.Do(req)
 		if err != nil {
