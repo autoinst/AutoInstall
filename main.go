@@ -14,52 +14,73 @@ import (
 var gitversion string
 
 func Search() {
-	mrpackFiles, err := filepath.Glob("modpack.mrpack")
-	if err != nil {
-		return
-	}
-	indexFiles, err := filepath.Glob("modrinth.index.json")
-	if err != nil {
-		return
-	}
-	zipFiles, err := filepath.Glob("modpack.zip")
-	if err != nil {
-		return
-	}
-	variablesFiles, err := filepath.Glob("variables.txt")
-	if err != nil {
-		return
-	}
+	mrpackFiles, _ := filepath.Glob("modpack.mrpack")
+	indexFiles, _ := filepath.Glob("modrinth.index.json")
+	zipFiles, _ := filepath.Glob("modpack.zip")
+	variablesFiles, _ := filepath.Glob("variables.txt")
 
+	allMrpacks, _ := filepath.Glob("*.mrpack")
+	allZips, _ := filepath.Glob("*.zip")
+
+	// 合并整合包文件
+	allPacks := append(allMrpacks, allZips...)
+
+	// 合并所有类型文件用于判断是否完全为空
 	allFiles := append(append(append(mrpackFiles, indexFiles...), zipFiles...), variablesFiles...)
 
-	if len(allFiles) == 0 {
-		fmt.Println("未找到整合包")
-		return
-	}
+	// 输出已有文件信息
 	for _, file := range mrpackFiles {
-		fmt.Println("已有" + file)
+		fmt.Println("已有 " + file)
 		pkg.Modrinth(file)
 	}
 	for _, file := range indexFiles {
-		fmt.Println("已有" + file)
+		fmt.Println("已有 " + file)
 		pkg.Modrinth(file)
 	}
 	for _, zipFile := range zipFiles {
-		fmt.Println("发现其他整合包")
+		fmt.Println("已有 " + zipFile)
 		pkg.SPCInstall(zipFile)
 	}
 
-	// 如果只有其他文件，则使用第一个
-	if len(allFiles) == 1 {
-		fmt.Println("发现整合包: " + allFiles[0])
-		pkg.SPCInstall(allFiles[0])
-	} else if len(allFiles) > 1 {
-		fmt.Println("发现多个整合包，请手动指定")
-		for _, file := range allFiles {
+	if len(allFiles) == 0 && len(allPacks) == 0 {
+		fmt.Println("未找到整合包")
+		return
+	}
+
+	if contains(allMrpacks, "modpack.mrpack") {
+		fmt.Println("发现整合包: modpack.mrpack")
+		pkg.SPCInstall("modpack.mrpack")
+		return
+	} else if contains(allZips, "modpack.zip") {
+		fmt.Println("发现整合包: modpack.zip")
+		pkg.SPCInstall("modpack.zip")
+		return
+	}
+
+	// 只有一个整合包
+	if len(allPacks) == 1 {
+		fmt.Println("发现整合包: " + allPacks[0])
+		pkg.SPCInstall(allPacks[0])
+		return
+	}
+
+	// 多个整合包
+	if len(allPacks) > 1 {
+		fmt.Println("发现多个整合包，但未找到 modpack.zip 或 modpack.mrpack")
+		fmt.Println("请将要使用的整合包重命名为 modpack.zip 或 modpack.mrpack 后重试")
+		for _, file := range allPacks {
 			fmt.Println("  " + file)
 		}
+		os.Exit(0)
 	}
+}
+func contains(list []string, target string) bool {
+	for _, item := range list {
+		if item == target {
+			return true
+		}
+	}
+	return false
 }
 
 func main() {
