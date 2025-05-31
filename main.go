@@ -49,7 +49,7 @@ func Search() {
 
 	if contains(allMrpacks, "modpack.mrpack") {
 		fmt.Println("发现整合包: modpack.mrpack")
-		pkg.SPCInstall("modpack.mrpack")
+		pkg.Modrinth("modpack.mrpack")
 		return
 	} else if contains(allZips, "modpack.zip") {
 		fmt.Println("发现整合包: modpack.zip")
@@ -60,7 +60,11 @@ func Search() {
 	// 只有一个整合包
 	if len(allPacks) == 1 {
 		fmt.Println("发现整合包: " + allPacks[0])
-		pkg.SPCInstall(allPacks[0])
+		if filepath.Ext(allPacks[0]) == ".zip" {
+			pkg.SPCInstall(allPacks[0])
+		} else {
+			pkg.Modrinth(allPacks[0])
+		}
 		return
 	}
 
