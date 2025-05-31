@@ -43,6 +43,7 @@ func Common(config core.InstConfig, cleaninst bool) {
 	}
 	if cleaninst {
 		fmt.Println("正在清理残留...")
+		_ = os.Remove("modrinth.index.json")
 		if err := os.Remove(".autoinst"); err != nil && !os.IsNotExist(err) {
 			log.Println("删除 .autoinst 文件失败:", err)
 		}

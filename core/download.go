@@ -87,7 +87,6 @@ func normalDownload(url, filePath string, totalSize int64) error {
 		if start > 0 {
 			req.Header.Set("Range", "bytes="+strconv.FormatInt(start, 10)+"-")
 		}
-		req.Header.Set("User-Agent", "autoinst/1.1.3")
 
 		client := &http.Client{}
 		resp, err := client.Do(req)
@@ -165,7 +164,6 @@ func chunkDownload(url, filePath string, totalSize int64, chunkSize int64) error
 
 		req, _ := http.NewRequest("GET", url, nil)
 		req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", downloaded, end))
-		req.Header.Set("User-Agent", "autoinst/1.1.3")
 
 		resp, err := client.Do(req)
 		if err != nil {
