@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -83,18 +82,6 @@ func Modrinth(file string) {
 		panic(fmt.Sprintf("移动 overrides 文件失败: %v", err))
 	}
 	_ = os.RemoveAll(overridesPath)
-	javaPath, simpfun, mise := core.FindJava()
-	if javaPath == "" {
-		log.Println("未找到 Java，请确保已安装 Java 并设置 PATH。")
-		return
-	}
-	fmt.Println("找到 Java 运行环境:", javaPath)
-	if simpfun {
-		fmt.Println("已启用 simpfun 环境")
-	}
-	if mise {
-		fmt.Println("启用 mise")
-	}
 	indexPath := filepath.Join("./", "modrinth.index.json")
 	indexFile, err := os.Open(indexPath)
 	if err != nil {
@@ -159,12 +146,12 @@ func Modrinth(file string) {
 				<-semaphore // 释放信号量
 				wg.Done()
 			}()
-			// 检查 env 中的 server 值
-			if envVal, ok := file.Env["server"]; ok {
-				if envVal != "required" {
-					return
-				}
+
+			// 忽略明确标注为 server 不支持的
+			if val, ok := file.Env["server"]; ok && val == "unsupported" {
+				return
 			}
+
 			filePath := filepath.Join(file.Path)
 			if err := os.MkdirAll(filepath.Dir(filePath), os.ModePerm); err != nil {
 				errChan <- err
