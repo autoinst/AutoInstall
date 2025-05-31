@@ -3,11 +3,12 @@ package pkg
 import (
 	"fmt"
 	"log"
+	"os"
 
 	"github.com/autoinst/AutoInstall/core"
 )
 
-func Common(config core.InstConfig) {
+func Common(config core.InstConfig, cleaninst bool) {
 	javaPath, simpfun, mise := core.FindJava()
 	if simpfun {
 		fmt.Println("已启用 simpfun 环境")
@@ -39,5 +40,24 @@ func Common(config core.InstConfig) {
 		}
 		fmt.Println("服务端下载完成")
 		core.RunScript(config.Version, config.Loader, config.LoaderVersion, simpfun, mise)
+	}
+	if cleaninst {
+		fmt.Println("正在清理残留...")
+		if err := os.Remove(".autoinst"); err != nil && !os.IsNotExist(err) {
+			log.Println("删除 .autoinst 文件失败:", err)
+		}
+		files, err := os.ReadDir(".")
+		if err == nil {
+			for _, file := range files {
+				if !file.IsDir() && len(file.Name()) > 4 && file.Name()[len(file.Name())-4:] == ".log" {
+					if err := os.Remove(file.Name()); err != nil {
+						fmt.Println("删除日志文件失败:", file.Name(), err)
+					}
+				}
+			}
+		} else {
+			log.Println("读取目录失败:", err)
+		}
+		fmt.Println("清理完成")
 	}
 }
