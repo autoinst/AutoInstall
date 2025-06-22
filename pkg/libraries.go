@@ -9,15 +9,15 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/autoinst/AutoInstall/core" // 确保导入 core 包，如果 VersionInfo 在 core 包中定义
+	"github.com/autoinst/AutoInstall/core"
 )
 
-func DownloadLibraries(versionInfo core.VersionInfo, librariesDir string, maxConnections int) error {
+func DownloadLibraries(versionInfo core.VersionInfo, librariesDir string, maxConnections int, downloadapi string) error {
 	if err := os.MkdirAll(librariesDir, os.ModePerm); err != nil {
 		return fmt.Errorf("无法创建目录: %v", err)
 	}
 
-	sem := make(chan struct{}, maxConnections) // 控制并发数
+	sem := make(chan struct{}, maxConnections)
 	var wg sync.WaitGroup
 
 	for _, lib := range versionInfo.Libraries {
@@ -27,10 +27,12 @@ func DownloadLibraries(versionInfo core.VersionInfo, librariesDir string, maxCon
 		}
 
 		url := lib.Downloads.Artifact.URL
-		url = strings.Replace(url, "https://maven.minecraftforge.net/", "https://bmclapi2.bangbang93.com/maven/", 1)
-		url = strings.Replace(url, "https://maven.fabricmc.net/", "https://bmclapi2.bangbang93.com/maven/", 1)
-		url = strings.Replace(url, "https://maven.neoforged.net/releases/", "https://bmclapi2.bangbang93.com/maven/", 1)
-		url = strings.Replace(url, "https://libraries.minecraft.net/", "https://bmclapi2.bangbang93.com/maven/", 1)
+		if downloadapi == "bmclapi" {
+			url = strings.Replace(url, "https://maven.minecraftforge.net/", "https://bmclapi2.bangbang93.com/maven/", 1)
+			url = strings.Replace(url, "https://maven.fabricmc.net/", "https://bmclapi2.bangbang93.com/maven/", 1)
+			url = strings.Replace(url, "https://maven.neoforged.net/releases/", "https://bmclapi2.bangbang93.com/maven/", 1)
+			url = strings.Replace(url, "https://libraries.minecraft.net/", "https://bmclapi2.bangbang93.com/maven/", 1)
+		}
 
 		if url == "" {
 			fmt.Printf("警告: 处理后 URL 仍为空，跳过库 %s\n", lib.Name)

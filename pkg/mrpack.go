@@ -101,8 +101,8 @@ func Modrinth(file string) {
 	// 创建 inst.json 文件
 	instConfig := core.InstConfig{
 		Version:        modrinthIndex.Dependencies.Minecraft,
-		Download:       "bmclapi", // 默认 bmclapi
-		MaxConnections: 16,
+		Download:       "bmclapi",
+		MaxConnections: 24,
 	}
 
 	if modrinthIndex.Dependencies.NeoForge != "" {
@@ -128,7 +128,7 @@ func Modrinth(file string) {
 	}
 
 	var wg sync.WaitGroup
-	maxConcurrency := 24 // 默认最大并发数
+	maxConcurrency := 24
 
 	semaphore := make(chan struct{}, maxConcurrency)
 	var errChan = make(chan error, len(modrinthIndex.Files))
@@ -147,7 +147,6 @@ func Modrinth(file string) {
 				wg.Done()
 			}()
 
-			// 忽略明确标注为 server 不支持的
 			if val, ok := file.Env["server"]; ok && val == "unsupported" {
 				return
 			}
@@ -171,7 +170,6 @@ func Modrinth(file string) {
 	wg.Wait()
 	close(errChan)
 
-	// 检查是否有错误发生
 	for err := range errChan {
 		if err != nil {
 			panic(err)

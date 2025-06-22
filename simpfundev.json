@@ -199,18 +199,18 @@
     {
         "file": "/inst.json",
         "name": "安装器配置",
-        "notice": "安装器基本配置，删除run.sh重启将重新安装。若整合包modrinth则改名modpack.mrpack,spc生成的则modpack.zip",
+        "notice": "安装器基本配置，删除run.sh重启将重新安装。若有多个整合包(压缩包)modrinth则改名modpack.mrpack,spc生成的则modpack.zip",
         "exps": [
             {
                 "type": "string",
-                "name": "服务器版本",
-                "notice": "预计的服务器版本",
-                "exp": "\"version\": \"(.+)\""
+                "name": "我的世界版本",
+                "notice": "预计的我的世界版本，填写latest为最新版，若加载器为原版则为快照版",
+                "exp": "\"version\": \"(.*)\""
             },
             {
                 "type": "select",
                 "name": "加载器",
-                "notice": "选择需要的加载器",
+                "notice": "选择需要的加载器，当我的世界版本为快照版时(Neo)Forge将不可用",
                 "exp": "\"loader\": \"(forge|fabric|neoforge|vanilla)\"",
                 "options": [
                     {
@@ -234,13 +234,13 @@
             {
                 "type": "string",
                 "name": "加载器版本",
-                "notice": "修改加载器版本",
-                "exp": "\"loaderVersion\": \"(.+)\""
+                "notice": "修改加载器版本，填写latest为最新版，当加载器为原版则无效",
+                "exp": "\"loaderVersion\": \"(.*)\""
             },
             {
                 "type": "select",
-                "name": "下载源",
-                "notice": "非必要不要碰",
+                "name": "文件下载源",
+                "notice": "非必要不要碰（镜像源可能会缺失刚更新的版本）",
                 "exp": "\"download\": \"(bmclapi|none)\"",
                 "options": [
                     {

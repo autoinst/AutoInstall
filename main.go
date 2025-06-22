@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 
@@ -102,12 +101,12 @@ func main() {
 	if _, err := os.Stat(instFile); err == nil {
 		data, err := os.ReadFile(instFile)
 		if err != nil {
-			log.Println("无法读取 inst.json 文件:", err)
+			fmt.Println("无法读取 inst.json 文件:", err)
 			return
 		}
 
 		if err := json.Unmarshal(data, &config); err != nil {
-			log.Println("无法解析 inst.json 文件:", err)
+			fmt.Println("无法解析 inst.json 文件:", err)
 			return
 		}
 		fmt.Println("准备安装:")
@@ -122,8 +121,8 @@ func main() {
 		fmt.Printf("下载源: %s\n", config.Download)
 		pkg.Common(config, cleaninst)
 	} else if os.IsNotExist(err) {
-		log.Println("inst.json 文件不存在")
+		fmt.Println("inst.json 文件不存在")
 	} else {
-		log.Println("无法访问 inst.json 文件:", err)
+		fmt.Println("无法访问 inst.json 文件:", err)
 	}
 }
