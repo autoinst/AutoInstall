@@ -36,33 +36,32 @@ func RunInstaller(installerPath string, loader string, version string, loaderVer
 	}
 	var cmd *exec.Cmd
 	if Download == "bmclapi" {
-		if loader == "forge" || loader == "neoforge" {
+		if loader == "forge" {
+			cmd = exec.Command(javaPath, "-jar", installerPath, "--installServer", "--mirror", "https://bmclapi2.bangbang93.com/maven/")
+		} else if loader == "neoforge" {
 			cmd = exec.Command(javaPath, "-jar", installerPath, "--installServer", "--mirror", "https://bmclapi2.bangbang93.com/maven/")
 		} else if loader == "fabric" {
-			args := []string{javaPath, "-jar", installerPath, "server"}
-			if version != "latest" {
-				args = append(args, "-mcversion", version)
-			}
-			if loaderVersion != "latest" {
-				args = append(args, "-loader", loaderVersion)
-			}
-			cmd = exec.Command(args[0], args[1:]...)
+			cmd = exec.Command(
+				javaPath, "-jar", installerPath, "server",
+				"-mavenurl", "https://bmclapi2.bangbang93.com/maven/",
+				"-metaurl", "https://bmclapi2.bangbang93.com/fabric-meta/",
+				"-mcversion", version,
+				"-loader", loaderVersion,
+			)
 		} else {
 			cmd = exec.Command(javaPath, "-jar", installerPath)
 		}
 	} else {
-		if loader == "forge" || loader == "neoforge" {
+		if loader == "forge" {
+			cmd = exec.Command(javaPath, "-jar", installerPath, "--installServer")
+		} else if loader == "neoforge" {
 			cmd = exec.Command(javaPath, "-jar", installerPath, "--installServer")
 		} else if loader == "fabric" {
-			args := []string{javaPath, "-jar", installerPath, "server"}
-
-			if version != "latest" {
-				args = append(args, "-mcversion", version)
-			}
-			if loaderVersion != "latest" {
-				args = append(args, "-loader", loaderVersion)
-			}
-			cmd = exec.Command(args[0], args[1:]...)
+			cmd = exec.Command(
+				javaPath, "-jar", installerPath, "server",
+				"-mcversion", version,
+				"-loader", loaderVersion,
+			)
 		} else {
 			cmd = exec.Command(javaPath, "-jar", installerPath)
 		}
