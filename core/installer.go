@@ -39,7 +39,7 @@ func RunInstaller(installerPath string, loader string, version string, loaderVer
 		if loader == "forge" || loader == "neoforge" {
 			cmd = exec.Command(javaPath, "-jar", installerPath, "--installServer", "--mirror", "https://bmclapi2.bangbang93.com/maven/")
 		} else if loader == "fabric" {
-			args := []string{javaPath, "-jar", installerPath, "server", "-mavenurl", "https://bmclapi2.bangbang93.com/maven/", "-metaurl", "https://bmclapi2.bangbang93.com/fabric-meta/"}
+			args := []string{javaPath, "-jar", installerPath, "server"}
 			if version != "latest" {
 				args = append(args, "-mcversion", version)
 			}
