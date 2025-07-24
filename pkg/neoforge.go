@@ -82,7 +82,7 @@ func NeoForgeB(config core.InstConfig, simpfun bool, mise bool) {
 	if err := core.RunInstaller(installerPath, config.Loader, config.Version, config.LoaderVersion, config.Download, simpfun, mise); err != nil {
 		fmt.Println("运行安装器失败:", err)
 	}
-	core.RunScript(config.Version, config.Loader, config.LoaderVersion, simpfun, mise)
+	core.RunScript(config.Version, config.Loader, config.LoaderVersion, simpfun, mise, config.Argsment)
 }
 
 func FetchLatestNeoForgeVersion() (string, error) {

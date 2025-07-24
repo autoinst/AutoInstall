@@ -77,7 +77,7 @@ func ForgeB(config core.InstConfig, simpfun bool, mise bool) {
 	if err := core.RunInstaller(installerPath, config.Loader, config.Version, config.LoaderVersion, config.Download, simpfun, mise); err != nil {
 		log.Println("运行安装器失败:", err)
 	}
-	core.RunScript(config.Version, config.Loader, config.LoaderVersion, simpfun, mise)
+	core.RunScript(config.Version, config.Loader, config.LoaderVersion, simpfun, mise, config.Argsment)
 }
 
 func FetchLatestForgeVersion() (string, string, error) {

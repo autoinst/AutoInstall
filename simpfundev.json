@@ -257,6 +257,11 @@
                 "type": "string",
                 "name": "最大线程数",
                 "exp": "\"maxconnections\": ([0-9]+)"
+            },
+            {
+                "type": "string",
+                "name": "自定义参数",
+                "exp": "\"argsment\": \"(.*)\""
             }
         ]
     }

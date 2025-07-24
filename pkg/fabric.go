@@ -54,7 +54,7 @@ func FabricB(config core.InstConfig, simpfun bool, mise bool) {
 		log.Println("运行安装器失败:", err)
 		return
 	}
-	core.RunScript(config.Version, config.Loader, config.LoaderVersion, simpfun, mise)
+	core.RunScript(config.Version, config.Loader, config.LoaderVersion, simpfun, mise, config.Argsment)
 }
 
 func FetchLatestFabricMinecraftVersion() (string, error) {

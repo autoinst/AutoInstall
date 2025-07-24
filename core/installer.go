@@ -128,92 +128,69 @@ func FindJava() (string, bool, bool) {
 	return "", simpfun, mise
 }
 
-func RunScript(Version string, Loader string, LoaderVersion string, simpfun bool, mise bool) {
+func RunScript(Version string, Loader string, LoaderVersion string, simpfun bool, mise bool, argsment string) {
+	// 删除旧的 run.sh
 	if _, err := os.Stat("run.sh"); err == nil {
 		if err := os.Remove("run.sh"); err != nil {
 			fmt.Println("删除旧的 run.sh 失败:", err)
 			return
 		}
 	}
+
+	memStr := os.Getenv("SERVER_MEMORY")
+	mem, err := strconv.Atoi(memStr)
+	if err != nil || mem <= 1500 {
+		fmt.Printf("SERVER_MEMORY无效")
+		mem = 4096 + 1500
+	}
+	maxmen := mem - 1500
+	modifiedArgsment := strings.ReplaceAll(argsment, "{maxmen}", strconv.Itoa(maxmen))
+
 	var scriptContent string
 	var javaPath string
-	if simpfun {
-		if mise {
-			javaPath = "java"
-			// 感谢aio镜像不支持
-			if _, err := os.Stat("server.properties"); os.IsNotExist(err) {
-				file, err := os.Create("server.properties")
-				if err != nil {
-					fmt.Println("创建 server.properties 失败:", err)
-				} else {
-					defer file.Close()
-				}
-				serverPort := os.Getenv("SERVER_PORT")
-				if serverPort == "" {
-					serverPort = "25565"
-				} else if _, err := strconv.Atoi(serverPort); err != nil {
-					serverPort = "25565"
-				}
 
-				props := make(map[string]string)
-				data, err := os.ReadFile("server.properties")
-				if err == nil {
-					lines := strings.Split(string(data), "\n")
-					for _, line := range lines {
-						line = strings.TrimSpace(line)
-						if !strings.HasPrefix(line, "#") && strings.Contains(line, "=") {
-							parts := strings.SplitN(line, "=", 2)
-							props[parts[0]] = parts[1]
-						}
-					}
-				}
-				props["server-ip"] = "0.0.0.0"
-				props["query.port"] = serverPort
-				props["server-port"] = serverPort
-				var content strings.Builder
-				for k, v := range props {
-					content.WriteString(fmt.Sprintf("%s=%s\n", k, v))
-				}
-				if err := os.WriteFile("server.properties", []byte(content.String()), 0644); err != nil {
-					fmt.Println("写入 server.properties 失败:", err)
-				}
-			}
+	if simpfun {
+		if Version < "1.17" {
+			javaPath = "/usr/bin/jdk/jdk1.8.0_361/bin/java"
+		} else if Version >= "1.17" && Version <= "1.20.3" {
+			javaPath = "/usr/bin/jdk/jdk-17.0.6/bin/java"
 		} else {
-			if Version < "1.17" {
-				javaPath = "/usr/bin/jdk/jdk1.8.0_361/bin/java"
-			} else if Version >= "1.17" && Version <= "1.20.3" {
-				javaPath = "/usr/bin/jdk/jdk-17.0.6/bin/java"
-			} else {
-				javaPath = "/usr/bin/jdk/jdk-21.0.2/bin/java"
-			}
+			javaPath = "/usr/bin/jdk/jdk-21.0.2/bin/java"
 		}
-		if Loader == "forge" {
-			scriptContent = fmt.Sprintf(javaPath+" @libraries/net/minecraftforge/forge/%s-%s/unix_args.txt \"$@\"", Version, LoaderVersion)
-		} else if Loader == "neoforge" {
-			scriptContent = fmt.Sprintf(javaPath+" @libraries/net/neoforged/neoforge/%s/unix_args.txt \"$@\"", LoaderVersion)
-		} else if Loader == "fabric" {
-			scriptContent = javaPath + " -jar fabric-server-launch.jar"
+
+		switch Loader {
+		case "forge":
+			scriptContent = fmt.Sprintf("%s %s @libraries/net/minecraftforge/forge/%s-%s/unix_args.txt \"$@\"", javaPath, modifiedArgsment, Version, LoaderVersion)
+		case "neoforge":
+			scriptContent = fmt.Sprintf("%s %s @libraries/net/neoforged/neoforge/%s/unix_args.txt \"$@\"", javaPath, modifiedArgsment, LoaderVersion)
+		case "fabric":
+			scriptContent = fmt.Sprintf("%s %s -jar fabric-server-launch.jar", javaPath, modifiedArgsment)
 		}
 	} else {
-		if Loader == "forge" {
-			scriptContent = fmt.Sprintf("java @libraries/net/minecraftforge/forge/%s-%s/unix_args.txt \"$@\"", Version, LoaderVersion)
-		} else if Loader == "neoforge" {
-			scriptContent = fmt.Sprintf("java @libraries/net/neoforged/neoforge/%s/unix_args.txt \"$@\"", LoaderVersion)
-		} else if Loader == "fabric" {
-			scriptContent = "java -jar fabric-server-launch.jar"
+		switch Loader {
+		case "forge":
+			scriptContent = fmt.Sprintf("java %s @libraries/net/minecraftforge/forge/%s-%s/unix_args.txt \"$@\"", modifiedArgsment, Version, LoaderVersion)
+		case "neoforge":
+			scriptContent = fmt.Sprintf("java %s @libraries/net/neoforged/neoforge/%s/unix_args.txt \"$@\"", modifiedArgsment, LoaderVersion)
+		case "fabric":
+			scriptContent = fmt.Sprintf("java %s -jar fabric-server-launch.jar", modifiedArgsment)
 		}
 	}
+
+	// 写入 run.sh
 	file, err := os.Create("run.sh")
 	if err != nil {
 		fmt.Println("创建文件失败:", err)
 		return
 	}
 	defer file.Close()
+
 	_, err = file.WriteString(scriptContent)
 	if err != nil {
 		fmt.Println("写入文件失败:", err)
 		return
 	}
+
 	err = os.Chmod("run.sh", 0777)
 	if err != nil {
 		fmt.Println("修改权限失败:", err)

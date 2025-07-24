@@ -14,6 +14,7 @@ type InstConfig struct {
 	LoaderVersion  string `json:"loaderVersion"`
 	Download       string `json:"download"`
 	MaxConnections int    `json:"maxconnections"`
+	Argsment       string `json:"argsment"`
 }
 
 // Config 定义配置文件的结构

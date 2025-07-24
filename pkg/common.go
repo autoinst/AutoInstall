@@ -60,7 +60,7 @@ func Common(config core.InstConfig, cleaninst bool) {
 			return
 		}
 		fmt.Println("服务端下载完成")
-		core.RunScript(config.Version, config.Loader, config.LoaderVersion, simpfun, mise)
+		core.RunScript(config.Version, config.Loader, config.LoaderVersion, simpfun, mise, config.Argsment)
 	}
 
 	if cleaninst {
