@@ -58,12 +58,14 @@ func SPCInstall(file string) {
 		fmt.Println("读取 variables.txt 失败:", err)
 		return
 	}
+	var config core.InstConfig
 	instConfig := core.InstConfig{
 		Version:        vars["MINECRAFT_VERSION"],
 		Loader:         strings.ToLower(strings.ToLower(vars["MODLOADER"])),
 		LoaderVersion:  vars["MODLOADER_VERSION"],
 		Download:       "bmclapi",
-		MaxConnections: 32,
+		MaxConnections: config.MaxConnections,
+		Argsment:       config.Argsment,
 	}
 	jsonData, err := json.MarshalIndent(instConfig, "", "  ")
 	if err != nil {

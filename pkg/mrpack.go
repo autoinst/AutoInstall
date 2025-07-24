@@ -97,12 +97,13 @@ func Modrinth(file string) {
 	if err != nil {
 		panic(err)
 	}
-
+	var config core.InstConfig
 	// 创建 inst.json 文件
 	instConfig := core.InstConfig{
 		Version:        modrinthIndex.Dependencies.Minecraft,
 		Download:       "bmclapi",
-		MaxConnections: 24,
+		MaxConnections: config.MaxConnections,
+		Argsment:       config.Argsment,
 	}
 
 	if modrinthIndex.Dependencies.NeoForge != "" {
