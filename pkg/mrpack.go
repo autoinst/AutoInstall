@@ -27,7 +27,7 @@ type ModrinthIndex struct {
 	} `json:"dependencies"`
 }
 
-func Modrinth(file string) {
+func Modrinth(file string, MaxConnections int, Argsment string) {
 	if strings.HasSuffix(file, ".mrpack") {
 		zipFile, err := zip.OpenReader(file)
 		if err != nil {
@@ -97,13 +97,12 @@ func Modrinth(file string) {
 	if err != nil {
 		panic(err)
 	}
-	var config core.InstConfig
 	// 创建 inst.json 文件
 	instConfig := core.InstConfig{
 		Version:        modrinthIndex.Dependencies.Minecraft,
 		Download:       "bmclapi",
-		MaxConnections: config.MaxConnections,
-		Argsment:       config.Argsment,
+		MaxConnections: MaxConnections,
+		Argsment:       Argsment,
 	}
 
 	if modrinthIndex.Dependencies.NeoForge != "" {

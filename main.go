@@ -21,7 +21,7 @@ func main() {
 	instFile := "inst.json"
 	var config core.InstConfig
 	fmt.Println("AutoInstall-" + gitversion + " https://github.com/autoinst/AutoInstall")
-	pkg.Search()
+	pkg.Search(config.MaxConnections, config.Argsment)
 	if _, err := os.Stat(instFile); err == nil {
 		data, err := os.ReadFile(instFile)
 		if err != nil {

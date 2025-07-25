@@ -6,17 +6,17 @@ import (
 	"path/filepath"
 )
 
-func Search() {
+func Search(MaxConnections int, Argsment string) {
 	fmt.Println("正在扫描可用的整合包...")
 	if _, err := os.Stat("variables.txt"); err == nil {
 		fmt.Println("检测到 variables.txt")
-		SPCInstall("variables.txt")
+		SPCInstall("variables.txt", MaxConnections, Argsment)
 		return
 	}
 
 	if _, err := os.Stat("modrinth.index.json"); err == nil {
 		fmt.Println("检测到 modrinth.index.json")
-		Modrinth("modrinth.index.json")
+		Modrinth("modrinth.index.json", MaxConnections, Argsment)
 		return
 	}
 
@@ -35,18 +35,18 @@ func Search() {
 
 	if fileExists("modpack.mrpack", mrpackFiles) {
 		fmt.Println("发现整合包: modpack.mrpack")
-		Modrinth("modpack.mrpack")
+		Modrinth("modpack.mrpack", MaxConnections, Argsment)
 		return
 	}
 	if fileExists("modpack.zip", zipFiles) {
 		fmt.Println("发现整合包: modpack.zip")
-		SPCInstall("modpack.zip")
+		SPCInstall("modpack.zip", MaxConnections, Argsment)
 		return
 	}
 
 	if len(allPacks) == 1 {
 		fmt.Println("发现整合包:", allPacks[0])
-		handlePack(allPacks[0])
+		handlePack(allPacks[0], MaxConnections, Argsment)
 		return
 	}
 
@@ -69,12 +69,12 @@ func fileExists(target string, list []string) bool {
 	return false
 }
 
-func handlePack(file string) {
+func handlePack(file string, MaxConnections int, Argsment string) {
 	switch filepath.Ext(file) {
 	case ".zip":
-		SPCInstall(file)
+		SPCInstall(file, MaxConnections, Argsment)
 	case ".mrpack":
-		Modrinth(file)
+		Modrinth(file, MaxConnections, Argsment)
 	default:
 		fmt.Println("未知文件类型:", file)
 	}
