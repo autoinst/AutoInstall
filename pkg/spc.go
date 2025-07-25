@@ -13,7 +13,7 @@ import (
 	"github.com/autoinst/AutoInstall/core"
 )
 
-func SPCInstall(file string, MaxConnections int, Argsment string) {
+func SPCInstall(file string, MaxCon int, Args string) {
 	if strings.HasSuffix(file, ".zip") {
 		zipFile, err := zip.OpenReader(file)
 		if err != nil {
@@ -63,8 +63,8 @@ func SPCInstall(file string, MaxConnections int, Argsment string) {
 		Loader:         strings.ToLower(strings.ToLower(vars["MODLOADER"])),
 		LoaderVersion:  vars["MODLOADER_VERSION"],
 		Download:       "bmclapi",
-		MaxConnections: MaxConnections,
-		Argsment:       Argsment,
+		MaxConnections: 32,
+		Argsment:       "-Xmx{maxmen}M -Xms{maxmen}M -XX:+AlwaysPreTouch -XX:+DisableExplicitGC -XX:+ParallelRefProcEnabled -XX:+PerfDisableSharedMem -XX:+UnlockExperimentalVMOptions -XX:+UseG1GC -XX:G1HeapRegionSize=8M -XX:G1HeapWastePercent=5 -XX:G1MaxNewSizePercent=40 -XX:G1MixedGCCountTarget=4 -XX:G1MixedGCLiveThresholdPercent=90 -XX:G1NewSizePercent=30 -XX:G1RSetUpdatingPauseTimePercent=5 -XX:G1ReservePercent=20 -XX:InitiatingHeapOccupancyPercent=15 -XX:MaxGCPauseMillis=200 -XX:MaxTenuringThreshold=1 -XX:SurvivorRatio=32 -Dusing.aikars.flags=https://mcflags.emc.gs -Daikars.new.flags=true",
 	}
 	jsonData, err := json.MarshalIndent(instConfig, "", "  ")
 	if err != nil {
@@ -78,7 +78,6 @@ func SPCInstall(file string, MaxConnections int, Argsment string) {
 	}
 }
 
-// readVariables 读取 variables.txt 文件并解析为 map
 func readVariables(filePath string) (map[string]string, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
