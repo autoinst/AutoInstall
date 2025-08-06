@@ -160,7 +160,11 @@ func RunScript(Version string, Loader string, LoaderVersion string, simpfun bool
 
 		switch Loader {
 		case "forge":
-			scriptContent = fmt.Sprintf("%s %s @libraries/net/minecraftforge/forge/%s-%s/unix_args.txt \"$@\"", javaPath, modifiedArgsment, Version, LoaderVersion)
+			if Version < "1.17" {
+				scriptContent = fmt.Sprintf("%s %s -jar forge-%s-%s.jar", javaPath, modifiedArgsment, Version, LoaderVersion)
+			} else {
+				scriptContent = fmt.Sprintf("%s %s @libraries/net/minecraftforge/forge/%s-%s/unix_args.txt \"$@\"", javaPath, modifiedArgsment, Version, LoaderVersion)
+			}
 		case "neoforge":
 			scriptContent = fmt.Sprintf("%s %s @libraries/net/neoforged/neoforge/%s/unix_args.txt \"$@\"", javaPath, modifiedArgsment, LoaderVersion)
 		case "fabric":
@@ -169,7 +173,11 @@ func RunScript(Version string, Loader string, LoaderVersion string, simpfun bool
 	} else {
 		switch Loader {
 		case "forge":
-			scriptContent = fmt.Sprintf("java %s @libraries/net/minecraftforge/forge/%s-%s/unix_args.txt \"$@\"", modifiedArgsment, Version, LoaderVersion)
+			if Version < "1.17" {
+				scriptContent = fmt.Sprintf("java %s -jar forge-%s-%s.jar", modifiedArgsment, Version, LoaderVersion)
+			} else {
+				scriptContent = fmt.Sprintf("java %s @libraries/net/minecraftforge/forge/%s-%s/unix_args.txt \"$@\"", modifiedArgsment, Version, LoaderVersion)
+			}
 		case "neoforge":
 			scriptContent = fmt.Sprintf("java %s @libraries/net/neoforged/neoforge/%s/unix_args.txt \"$@\"", modifiedArgsment, LoaderVersion)
 		case "fabric":

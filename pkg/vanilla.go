@@ -15,6 +15,8 @@ func DownloadServerJar(version, loader, librariesDir string) error {
 	if loader == "forge" {
 		if version >= "1.20.4" {
 			serverFileName = fmt.Sprintf("server-%s-bundled.jar", version)
+		} else if version <= "1.16.5" {
+			serverFileName = fmt.Sprintf("minecraft_server.%s.jar", version)
 		} else {
 			serverFileName = fmt.Sprintf("server-%s.jar", version)
 		}
@@ -26,6 +28,8 @@ func DownloadServerJar(version, loader, librariesDir string) error {
 
 	var serverPath string
 	if loader == "fabric" || loader == "vanilla" {
+		serverPath = filepath.Join(".", serverFileName)
+	} else if loader == "forge" && version <= "1.16.5" {
 		serverPath = filepath.Join(".", serverFileName)
 	} else {
 		serverPath = filepath.Join(librariesDir, "net", "minecraft", "server", version, serverFileName)
