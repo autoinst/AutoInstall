@@ -156,13 +156,19 @@ func Modrinth(file string, MaxCon int, Args string) {
 				errChan <- err
 				return
 			}
+
+			var downloadErr error
 			for _, downloadURL := range file.Downloads {
-				fmt.Println("下载链接:", downloadURL)
-				err := core.DownloadFile(downloadURL, filePath)
-				if err != nil {
-					errChan <- err
-					return
+				fmt.Println("尝试下载:", downloadURL)
+				downloadErr = core.DownloadFile(downloadURL, filePath)
+				if downloadErr == nil {
+					break
 				}
+				fmt.Printf("下载失败: %v, 尝试下一个链接\n", downloadErr)
+			}
+			if downloadErr != nil {
+				errChan <- fmt.Errorf("所有下载链接均失败: %v", downloadErr)
+				return
 			}
 		}(file)
 	}

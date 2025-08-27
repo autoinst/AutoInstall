@@ -26,7 +26,8 @@ func DownloadLibraries(versionInfo core.VersionInfo, librariesDir string, maxCon
 			continue
 		}
 
-		url := lib.Downloads.Artifact.URL
+		originalURL := lib.Downloads.Artifact.URL
+		url := originalURL
 		if downloadapi == "bmclapi" {
 			url = strings.Replace(url, "https://maven.minecraftforge.net/", "https://bmclapi2.bangbang93.com/maven/", 1)
 			url = strings.Replace(url, "https://maven.fabricmc.net/", "https://bmclapi2.bangbang93.com/maven/", 1)
@@ -41,38 +42,45 @@ func DownloadLibraries(versionInfo core.VersionInfo, librariesDir string, maxCon
 		filePath := filepath.Join(librariesDir, lib.Downloads.Artifact.Path)
 
 		wg.Add(1)
-		go func(lib core.Library, url, filePath string) {
+		go func(lib core.Library, url, originalURL, filePath string) {
 			defer wg.Done()
-			sem <- struct{}{} // 获取令牌
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
 			// 校验 SHA1
 			if _, err := os.Stat(filePath); err == nil {
 				fileSHA1, err := computeSHA1(filePath)
 				if err == nil && fileSHA1 == lib.Downloads.Artifact.SHA1 {
 					fmt.Printf("已存在且校验通过: %s\n", filePath)
-					<-sem // 释放令牌
 					return
 				} else {
 					fmt.Printf("文件 %s 校验失败 (或无法校验)，重新下载...\n", filePath)
 					os.Remove(filePath)
 				}
 			}
+
 			if err := os.MkdirAll(filepath.Dir(filePath), os.ModePerm); err != nil {
 				fmt.Printf("无法创建目录: %v\n", err)
+				return
 			}
-			fmt.Println("正在下载:", url)
-			if err := core.DownloadFile(url, filePath); err != nil {
-				fmt.Printf("下载失败 %s (%s): %v\n", lib.Name, url, err)
+			err := core.DownloadFile(url, filePath)
+			if err != nil {
+				fmt.Printf("下载失败 %s: %v\n", lib.Name, err)
+				fmt.Println("尝试使用原始链接下载:", originalURL)
+				if err := core.DownloadFile(originalURL, filePath); err != nil {
+					fmt.Printf("原始链接下载也失败 %s: %v\n", lib.Name, err)
+				} else {
+					fmt.Println("使用原始链接下载完成:", filePath)
+				}
 			} else {
-				fmt.Println("下载完成:", filePath)
+				fmt.Println("使用 BMCLAPI 下载完成:", filePath)
 			}
-			<-sem // 释放令牌
-		}(lib, url, filePath)
+		}(lib, url, originalURL, filePath)
 	}
 	wg.Wait()
 	return nil
 }
 
-// 计算文件的 SHA1 哈希值
 func computeSHA1(filePath string) (string, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
