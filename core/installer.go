@@ -160,10 +160,10 @@ func RunScript(Version string, Loader string, LoaderVersion string, simpfun bool
 
 		switch Loader {
 		case "forge":
-			if Version < "1.17" {
-				scriptContent = fmt.Sprintf("%s %s -jar forge-%s-%s.jar", javaPath, modifiedArgsment, Version, LoaderVersion)
-			} else {
+			if Version > "1.17" {
 				scriptContent = fmt.Sprintf("%s %s @libraries/net/minecraftforge/forge/%s-%s/unix_args.txt \"$@\"", javaPath, modifiedArgsment, Version, LoaderVersion)
+			} else {
+				scriptContent = fmt.Sprintf("%s %s -jar forge-%s-%s.jar", javaPath, modifiedArgsment, Version, LoaderVersion)
 			}
 		case "neoforge":
 			scriptContent = fmt.Sprintf("%s %s @libraries/net/neoforged/neoforge/%s/unix_args.txt \"$@\"", javaPath, modifiedArgsment, LoaderVersion)
