@@ -1,7 +1,6 @@
 package pkg
 
 import (
-	"archive/zip"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -28,36 +27,6 @@ type ModrinthIndex struct {
 }
 
 func Modrinth(file string, MaxCon int, Args string) {
-	if strings.HasSuffix(file, ".mrpack") {
-		zipFile, err := zip.OpenReader(file)
-		if err != nil {
-			panic(err)
-		}
-		defer zipFile.Close()
-		for _, f := range zipFile.File {
-			filePath := filepath.Join("./", f.Name)
-			if f.FileInfo().IsDir() {
-				_ = os.MkdirAll(filePath, os.ModePerm)
-				continue
-			}
-			if err := os.MkdirAll(filepath.Dir(filePath), os.ModePerm); err != nil {
-				panic(err)
-			}
-			dstFile, err := os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, f.Mode())
-			if err != nil {
-				panic(err)
-			}
-			file, err := f.Open()
-			if err != nil {
-				panic(err)
-			}
-			if _, err := io.Copy(dstFile, file); err != nil {
-				panic(err)
-			}
-			dstFile.Close()
-			file.Close()
-		}
-	}
 	overridesPath := filepath.Join("./", "overrides")
 	err := filepath.Walk(overridesPath, func(path string, info os.FileInfo, walkErr error) error {
 		if walkErr != nil {
@@ -82,7 +51,11 @@ func Modrinth(file string, MaxCon int, Args string) {
 		panic(fmt.Sprintf("移动 overrides 文件失败: %v", err))
 	}
 	_ = os.RemoveAll(overridesPath)
-	indexPath := filepath.Join("./", "modrinth.index.json")
+	idx := "modrinth.index.json"
+	if file != "" && strings.HasSuffix(file, ".json") {
+		idx = file
+	}
+	indexPath := filepath.Join("./", idx)
 	indexFile, err := os.Open(indexPath)
 	if err != nil {
 		fmt.Println("未找到modrinth.index.json")

@@ -1,59 +1,25 @@
 package pkg
 
 import (
-	"archive/zip"
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/autoinst/AutoInstall/core"
 )
 
 func SPCInstall(file string, MaxCon int, Args string) {
-	if strings.HasSuffix(file, ".zip") {
-		zipFile, err := zip.OpenReader(file)
-		if err != nil {
-			panic(err)
-		}
-		defer zipFile.Close()
-		for _, f := range zipFile.File {
-			filePath := filepath.Join("./", f.Name)
-			// 忽略 start.sh 和 run.sh 脚本
-			if f.Name == "start.sh" || f.Name == "run.sh" {
-				fmt.Printf("跳过文件: %s\n", f.Name)
-				continue
-			}
-			if f.FileInfo().IsDir() {
-				_ = os.MkdirAll(filePath, os.ModePerm)
-				continue
-			}
-			if err := os.MkdirAll(filepath.Dir(filePath), os.ModePerm); err != nil {
-				panic(err)
-			}
-			dstFile, err := os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, f.Mode())
-			if err != nil {
-				panic(err)
-			}
-			file, err := f.Open()
-			if err != nil {
-				panic(err)
-			}
-			if _, err := io.Copy(dstFile, file); err != nil {
-				panic(err)
-			}
-			dstFile.Close()
-			file.Close()
-		}
+	varsFile := "variables.txt"
+	if file != "" && strings.HasSuffix(strings.ToLower(file), ".txt") {
+		varsFile = file
 	}
-	if _, err := os.Stat("variables.txt"); os.IsNotExist(err) {
+	if _, err := os.Stat(varsFile); os.IsNotExist(err) {
 		fmt.Println("错误：当前目录下缺少 variables.txt 文件。")
 		return
 	}
-	vars, err := readVariables("variables.txt")
+	vars, err := readVariables(varsFile)
 	if err != nil {
 		fmt.Println("读取 variables.txt 失败:", err)
 		return
