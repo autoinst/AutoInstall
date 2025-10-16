@@ -32,8 +32,8 @@ type CurseForgeManifest struct {
 // resolveCFDownloadURL 使用 CurseForge API 获取可用直链
 // 需要环境变量 CF_API_KEY，可在 https://console.curseforge.com/ 申请
 func resolveCFDownloadURL(projectID, fileID int) (string, error) {
-	apiKey := os.Getenv("CF_API_KEY")
-	if apiKey == "" {
+	cfapiKey := os.Getenv("CF_API_KEY")
+	if cfapiKey == "" {
 		return "", fmt.Errorf("缺少 CF_API_KEY")
 	}
 	// 直接获取下载直链
@@ -42,7 +42,7 @@ func resolveCFDownloadURL(projectID, fileID int) (string, error) {
 		return "", err
 	}
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("x-api-key", apiKey)
+	req.Header.Set("x-api-key", cfapiKey)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return "", err
@@ -65,7 +65,6 @@ func resolveCFDownloadURL(projectID, fileID int) (string, error) {
 }
 
 func CurseForge(file string, MaxCon int, Args string) {
-	// 假定压缩包已在 modpack.go 中解压
 	// 1) 读取 manifest.json
 	mf := "manifest.json"
 	if file != "" && strings.HasSuffix(strings.ToLower(file), ".json") {

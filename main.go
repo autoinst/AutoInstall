@@ -10,6 +10,7 @@ import (
 )
 
 var gitversion string
+var cfapiKey string
 
 func main() {
 	if gitversion == "" {
@@ -21,6 +22,9 @@ func main() {
 	instFile := "inst.json"
 	var config core.InstConfig
 	fmt.Println("AutoInstall-" + gitversion + " https://github.com/autoinst/AutoInstall")
+	if cfapiKey == "" {
+		fmt.Println("无法获取CF APIKEY,自己构建的?")
+	}
 	pkg.Search(config.MaxConnections, config.Argsment)
 	if _, err := os.Stat(instFile); err == nil {
 		data, err := os.ReadFile(instFile)

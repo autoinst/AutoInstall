@@ -12,7 +12,8 @@ func DownloadServerJar(version, loader, librariesDir string) error {
 	downloadURL := fmt.Sprintf("https://bmclapi2.bangbang93.com/version/%s/server", version)
 	var serverFileName string
 
-	if loader == "forge" {
+	switch loader {
+	case "forge":
 		if version >= "1.20.4" {
 			serverFileName = fmt.Sprintf("server-%s-bundled.jar", version)
 		} else if version <= "1.16.5" {
@@ -20,9 +21,9 @@ func DownloadServerJar(version, loader, librariesDir string) error {
 		} else {
 			serverFileName = fmt.Sprintf("server-%s.jar", version)
 		}
-	} else if loader == "fabric" || loader == "vanilla" {
+	case "fabric", "vanilla":
 		serverFileName = "server.jar"
-	} else {
+	default:
 		serverFileName = fmt.Sprintf("server-%s.jar", version)
 	}
 

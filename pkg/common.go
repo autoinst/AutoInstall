@@ -35,16 +35,14 @@ func Common(config core.InstConfig, cleaninst bool) {
 			}
 		}
 	}
-	if config.Loader == "neoforge" {
+	switch config.Loader {
+	case "neoforge":
 		NeoForgeB(config, simpfun, mise)
-	} else if config.Loader == "forge" {
+	case "forge":
 		ForgeB(config, simpfun, mise)
-	}
-
-	if config.Loader == "fabric" {
+	case "fabric":
 		FabricB(config, simpfun, mise)
-	}
-	if config.Loader == "vanilla" {
+	case "vanilla":
 		if config.Version == "latest" {
 			latestSnapshot, err := FetchLatestVanillaVersion(config.Download)
 			if err != nil {
