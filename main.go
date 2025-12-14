@@ -22,9 +22,6 @@ func main() {
 	instFile := "inst.json"
 	var config core.InstConfig
 	fmt.Println("AutoInstall-" + gitversion + " https://github.com/autoinst/AutoInstall")
-	if cfapiKey == "" {
-		fmt.Println("无法获取CF APIKEY,自己构建的?")
-	}
 	pkg.Search(config.MaxConnections, config.Argsment)
 	if _, err := os.Stat(instFile); err == nil {
 		data, err := os.ReadFile(instFile)
@@ -48,6 +45,7 @@ func main() {
 		}
 		fmt.Printf("下载源: %s\n", config.Download)
 		pkg.Common(config, cleaninst)
+		pkg.WaitDownloads()
 	} else if os.IsNotExist(err) {
 		fmt.Println("inst.json 文件不存在")
 	} else {

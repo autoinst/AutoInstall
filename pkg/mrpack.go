@@ -28,47 +28,33 @@ type ModrinthIndex struct {
 
 func Modrinth(file string, MaxCon int, Args string) {
 	overridesPath := filepath.Join("./", "overrides")
-	err := filepath.Walk(overridesPath, func(path string, info os.FileInfo, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		if !info.IsDir() {
-			relPath, err := filepath.Rel(overridesPath, path)
-			if err != nil {
-				return err
-			}
-			destPath := filepath.Join("./", relPath)
-			if err := os.MkdirAll(filepath.Dir(destPath), os.ModePerm); err != nil {
-				return err
-			}
-			if err := os.Rename(path, destPath); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		panic(fmt.Sprintf("移动 overrides 文件失败: %v", err))
+	if err := moveOverrides(overridesPath); err != nil {
+		fmt.Println("移动 overrides 文件失败:", err)
+		return
 	}
-	_ = os.RemoveAll(overridesPath)
+
 	idx := "modrinth.index.json"
-	if file != "" && strings.HasSuffix(file, ".json") {
+	if file != "" && strings.HasSuffix(strings.ToLower(file), ".json") {
 		idx = file
 	}
 	indexPath := filepath.Join("./", idx)
 	indexFile, err := os.Open(indexPath)
 	if err != nil {
-		fmt.Println("未找到modrinth.index.json")
-		os.Exit(0)
+		fmt.Println("未找到 modrinth.index.json")
+		return
 	}
 	defer indexFile.Close()
 
-	byteValue, _ := io.ReadAll(indexFile)
+	byteValue, err := io.ReadAll(indexFile)
+	if err != nil {
+		fmt.Println("读取 modrinth.index.json 失败:", err)
+		return
+	}
 
 	var modrinthIndex ModrinthIndex
-	err = json.Unmarshal(byteValue, &modrinthIndex)
-	if err != nil {
-		panic(err)
+	if err := json.Unmarshal(byteValue, &modrinthIndex); err != nil {
+		fmt.Println("解析 modrinth.index.json 失败:", err)
+		return
 	}
 	// 创建 inst.json 文件
 	instConfig := core.InstConfig{
@@ -92,19 +78,21 @@ func Modrinth(file string, MaxCon int, Args string) {
 	// 写入 inst.json 文件
 	jsonData, err := json.MarshalIndent(instConfig, "", "  ")
 	if err != nil {
-		panic(err)
+		fmt.Println("生成 inst.json 失败:", err)
+		return
 	}
-
-	err = os.WriteFile("inst.json", jsonData, 0777)
-	if err != nil {
-		panic(err)
+	if err := os.WriteFile("inst.json", jsonData, 0777); err != nil {
+		fmt.Println("写入 inst.json 失败:", err)
+		return
 	}
 
 	var wg sync.WaitGroup
 	maxConcurrency := 24
-
+	if MaxCon > 0 {
+		maxConcurrency = MaxCon
+	}
 	semaphore := make(chan struct{}, maxConcurrency)
-	var errChan = make(chan error, len(modrinthIndex.Files))
+	errChan := make(chan error, len(modrinthIndex.Files))
 
 	for _, file := range modrinthIndex.Files {
 		wg.Add(1)
@@ -151,9 +139,38 @@ func Modrinth(file string, MaxCon int, Args string) {
 
 	for err := range errChan {
 		if err != nil {
-			panic(err)
+			fmt.Println("下载出错:", err)
 		}
 	}
 
 	_ = os.Remove(indexFile.Name())
+}
+
+func moveOverrides(overridesPath string) error {
+	if stat, err := os.Stat(overridesPath); err != nil || !stat.IsDir() {
+		return nil
+	}
+	if err := filepath.Walk(overridesPath, func(path string, info os.FileInfo, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if info.IsDir() {
+			return nil
+		}
+		relPath, err := filepath.Rel(overridesPath, path)
+		if err != nil {
+			return err
+		}
+		destPath := filepath.Join("./", relPath)
+		if err := os.MkdirAll(filepath.Dir(destPath), os.ModePerm); err != nil {
+			return err
+		}
+		if err := os.Rename(path, destPath); err != nil {
+			return err
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+	return os.RemoveAll(overridesPath)
 }
