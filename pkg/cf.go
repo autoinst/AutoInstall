@@ -31,6 +31,15 @@ type CurseForgeManifest struct {
 
 var cfapiKey string
 
+type CFError struct {
+	StatusCode int
+	Body       string
+}
+
+func (e *CFError) Error() string {
+	return fmt.Sprintf("响应异常: %d %s", e.StatusCode, e.Body)
+}
+
 // resolveCFDownloadURL 使用 CurseForge API 获取可用直链
 // 需要环境变量 CF_API_KEY，可在 https://console.curseforge.com/ 申请
 func resolveCFDownloadURL(projectID, fileID int) (string, error) {
@@ -53,7 +62,7 @@ func resolveCFDownloadURL(projectID, fileID int) (string, error) {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		b, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("响应异常: %d %s", resp.StatusCode, string(b))
+		return "", &CFError{StatusCode: resp.StatusCode, Body: string(b)}
 	}
 	var out struct {
 		Data string `json:"data"`
@@ -75,14 +84,14 @@ func CurseForge(file string, MaxCon int, Args string) {
 	mfPath := filepath.Join("./", mf)
 	mfFile, err := os.Open(mfPath)
 	if err != nil {
-		fmt.Println("未找到 manifest.json，停止 CurseForge 安装流程")
+		core.Log("未找到 manifest.json，停止 CurseForge 安装流程")
 		return
 	}
 	defer mfFile.Close()
 
 	var manifest CurseForgeManifest
 	if err := json.NewDecoder(mfFile).Decode(&manifest); err != nil {
-		fmt.Println("解析 manifest.json 失败:", err)
+		core.Log("解析 manifest.json 失败:", err)
 		return
 	}
 
@@ -91,7 +100,7 @@ func CurseForge(file string, MaxCon int, Args string) {
 		overridesDir = "overrides"
 	}
 	if err := moveOverrides(filepath.Join("./", overridesDir)); err != nil {
-		fmt.Println("移动 overrides 文件失败:", err)
+		core.Log("移动 overrides 文件失败:", err)
 		return
 	}
 
@@ -135,11 +144,11 @@ func CurseForge(file string, MaxCon int, Args string) {
 	}
 	jsonData, err := json.MarshalIndent(inst, "", "  ")
 	if err != nil {
-		fmt.Println("生成 inst.json 失败:", err)
+		core.Log("生成 inst.json 失败:", err)
 		return
 	}
 	if err := os.WriteFile("inst.json", jsonData, 0777); err != nil {
-		fmt.Println("写入 inst.json 失败:", err)
+		core.Log("写入 inst.json 失败:", err)
 		return
 	}
 
@@ -178,8 +187,12 @@ func CurseForge(file string, MaxCon int, Args string) {
 				url, err := resolveCFDownloadURL(entry.ProjectID, entry.FileID)
 				if err != nil {
 					apiUrl := fmt.Sprintf("https://api.curseforge.com/v1/mods/%d/files/%d/download-url", entry.ProjectID, entry.FileID)
-					core.RecordError(apiUrl, err, err.Error())
-					errChan <- err
+					respBody := err.Error()
+					if cfErr, ok := err.(*CFError); ok {
+						respBody = cfErr.Body
+					}
+					core.RecordError(apiUrl, err, respBody)
+					errChan <- fmt.Errorf("获取直链失败(Project %d, File %d): %v", entry.ProjectID, entry.FileID, err)
 					return
 				}
 
@@ -193,7 +206,7 @@ func CurseForge(file string, MaxCon int, Args string) {
 					errChan <- err
 					return
 				}
-				fmt.Println("尝试下载:", url)
+				core.Log("尝试下载:", url)
 				if err := core.DownloadFile(url, dst); err != nil {
 					core.RecordError(url, err, "Download failed")
 					errChan <- fmt.Errorf("下载失败(Project %d, File %d): %v", entry.ProjectID, entry.FileID, err)
@@ -206,7 +219,7 @@ func CurseForge(file string, MaxCon int, Args string) {
 		close(errChan)
 		for err := range errChan {
 			if err != nil {
-				fmt.Println("下载出错:", err)
+				core.Log("下载出错:", err)
 			}
 		}
 	}()

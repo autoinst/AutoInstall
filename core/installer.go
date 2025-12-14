@@ -25,7 +25,7 @@ func RunInstaller(installerPath string, loader string, version string, loaderVer
 			}
 			err := cmd.Run()
 			if err != nil {
-				fmt.Println("mise use failed:", err)
+				Log("mise use failed:", err)
 			}
 			javaPath = "java"
 		} else {
@@ -132,7 +132,7 @@ func RunScript(Version string, Loader string, LoaderVersion string, simpfun bool
 	// 删除旧的 run.sh
 	if _, err := os.Stat("run.sh"); err == nil {
 		if err := os.Remove("run.sh"); err != nil {
-			fmt.Println("删除旧的 run.sh 失败:", err)
+			Log("删除旧的 run.sh 失败:", err)
 			return
 		}
 	}
@@ -188,20 +188,20 @@ func RunScript(Version string, Loader string, LoaderVersion string, simpfun bool
 	// 写入 run.sh
 	file, err := os.Create("run.sh")
 	if err != nil {
-		fmt.Println("创建文件失败:", err)
+		Log("创建文件失败:", err)
 		return
 	}
 	defer file.Close()
 
 	_, err = file.WriteString(scriptContent)
 	if err != nil {
-		fmt.Println("写入文件失败:", err)
+		Log("写入文件失败:", err)
 		return
 	}
 
 	err = os.Chmod("run.sh", 0777)
 	if err != nil {
-		fmt.Println("修改权限失败:", err)
+		Log("修改权限失败:", err)
 		return
 	}
 }

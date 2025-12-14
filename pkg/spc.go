@@ -3,7 +3,6 @@ package pkg
 import (
 	"bufio"
 	"encoding/json"
-	"fmt"
 	"os"
 	"strings"
 
@@ -16,12 +15,12 @@ func SPCInstall(file string, MaxCon int, Args string) {
 		varsFile = file
 	}
 	if _, err := os.Stat(varsFile); os.IsNotExist(err) {
-		fmt.Println("错误：当前目录下缺少 variables.txt 文件。")
+		core.Log("错误：当前目录下缺少 variables.txt 文件。")
 		return
 	}
 	vars, err := readVariables(varsFile)
 	if err != nil {
-		fmt.Println("读取 variables.txt 失败:", err)
+		core.Log("读取 variables.txt 失败:", err)
 		return
 	}
 	instConfig := core.InstConfig{
@@ -34,12 +33,12 @@ func SPCInstall(file string, MaxCon int, Args string) {
 	}
 	jsonData, err := json.MarshalIndent(instConfig, "", "  ")
 	if err != nil {
-		fmt.Println("生成 JSON 数据失败:", err)
+		core.Log("生成 JSON 数据失败:", err)
 		return
 	}
 	err = os.WriteFile("inst.json", jsonData, 0777)
 	if err != nil {
-		fmt.Println("写入 inst.json 文件失败:", err)
+		core.Log("写入 inst.json 文件失败:", err)
 		return
 	}
 }

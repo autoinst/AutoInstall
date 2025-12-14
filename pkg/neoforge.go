@@ -14,7 +14,7 @@ func NeoForgeB(config core.InstConfig, simpfun bool, mise bool) {
 	if config.Version == "latest" {
 		latestVersion, err := FetchLatestNeoForgeVersion()
 		if err != nil {
-			fmt.Println("获取最新版本失败:", err)
+			core.Log("获取最新版本失败:", err)
 			return
 		}
 		config.LoaderVersion = latestVersion
@@ -23,7 +23,7 @@ func NeoForgeB(config core.InstConfig, simpfun bool, mise bool) {
 		if len(parts) >= 3 {
 			config.Version = fmt.Sprintf("1.%s.%s", parts[0], parts[1])
 		} else {
-			fmt.Println("最新版本号格式不正确:", latestVersion)
+			core.Log("最新版本号格式不正确:", latestVersion)
 			return
 		}
 	}
@@ -31,7 +31,7 @@ func NeoForgeB(config core.InstConfig, simpfun bool, mise bool) {
 	if config.LoaderVersion == "latest" {
 		latestMatchingVersion, err := FetchLatestMatchingNeoForgeVersion(config.Version)
 		if err != nil {
-			fmt.Println("获取对应版本最新加载器版本失败:", err)
+			core.Log("获取对应版本最新加载器版本失败:", err)
 			return
 		}
 		config.LoaderVersion = latestMatchingVersion
@@ -51,36 +51,36 @@ func NeoForgeB(config core.InstConfig, simpfun bool, mise bool) {
 	}
 
 	installerPath := filepath.Join("./.autoinst/cache", fmt.Sprintf("neoforge-%s-installer.jar", config.LoaderVersion))
-	fmt.Println("当前为 neoforge 加载器，正在下载:", installerURL)
+	core.Log("当前为 neoforge 加载器，正在下载:", installerURL)
 	if err := core.DownloadFile(installerURL, installerPath); err != nil {
-		fmt.Println("下载 neoforge 失败:", err)
+		core.Log("下载 neoforge 失败:", err)
 		return
 	}
-	fmt.Println("neoforge 安装器下载完成:", installerPath)
+	core.Log("neoforge 安装器下载完成:", installerPath)
 
 	// 提取 version.json
 	versionInfo, err := core.ExtractVersionJson(installerPath)
 	if err != nil {
-		fmt.Println("提取 version.json 失败:", err)
+		core.Log("提取 version.json 失败:", err)
 		return
 	}
 
 	librariesDir := "./libraries"
 	if err := DownloadLibraries(versionInfo, librariesDir, config.MaxConnections, config.Download); err != nil {
-		fmt.Println("下载库文件失败:", err)
+		core.Log("下载库文件失败:", err)
 		return
 	}
 
 	if config.Download == "bmclapi" {
 		if err := DownloadServerJar(config.Version, config.Loader, librariesDir); err != nil {
-			fmt.Println("下载 mc 服务端失败:", err)
+			core.Log("下载 mc 服务端失败:", err)
 			return
 		}
 	}
 
-	fmt.Println("库文件下载完成")
+	core.Log("库文件下载完成")
 	if err := core.RunInstaller(installerPath, config.Loader, config.Version, config.LoaderVersion, config.Download, simpfun, mise); err != nil {
-		fmt.Println("运行安装器失败:", err)
+		core.Log("运行安装器失败:", err)
 	}
 	core.RunScript(config.Version, config.Loader, config.LoaderVersion, simpfun, mise, config.Argsment)
 }

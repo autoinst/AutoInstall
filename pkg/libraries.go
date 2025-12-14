@@ -22,7 +22,7 @@ func DownloadLibraries(versionInfo core.VersionInfo, librariesDir string, maxCon
 
 	for _, lib := range versionInfo.Libraries {
 		if lib.Downloads.Artifact.URL == "" {
-			fmt.Printf("跳过库文件 %s: 未提供下载 URL\n", lib.Name)
+			core.Logf("跳过库文件 %s: 未提供下载 URL\n", lib.Name)
 			continue
 		}
 
@@ -36,7 +36,7 @@ func DownloadLibraries(versionInfo core.VersionInfo, librariesDir string, maxCon
 		}
 
 		if url == "" {
-			fmt.Printf("警告: 处理后 URL 仍为空，跳过库 %s\n", lib.Name)
+			core.Logf("警告: 处理后 URL 仍为空，跳过库 %s\n", lib.Name)
 			continue
 		}
 		filePath := filepath.Join(librariesDir, lib.Downloads.Artifact.Path)
@@ -51,29 +51,29 @@ func DownloadLibraries(versionInfo core.VersionInfo, librariesDir string, maxCon
 			if _, err := os.Stat(filePath); err == nil {
 				fileSHA1, err := computeSHA1(filePath)
 				if err == nil && fileSHA1 == lib.Downloads.Artifact.SHA1 {
-					fmt.Printf("已存在且校验通过: %s\n", filePath)
+					core.Logf("已存在且校验通过: %s\n", filePath)
 					return
 				} else {
-					fmt.Printf("文件 %s 校验失败 (或无法校验)，重新下载...\n", filePath)
+					core.Logf("文件 %s 校验失败 (或无法校验)，重新下载...\n", filePath)
 					os.Remove(filePath)
 				}
 			}
 
 			if err := os.MkdirAll(filepath.Dir(filePath), os.ModePerm); err != nil {
-				fmt.Printf("无法创建目录: %v\n", err)
+				core.Logf("无法创建目录: %v\n", err)
 				return
 			}
 			err := core.DownloadFile(url, filePath)
 			if err != nil {
-				fmt.Printf("下载失败 %s: %v\n", lib.Name, err)
-				fmt.Println("尝试使用原始链接下载:", originalURL)
+				core.Logf("下载失败 %s: %v\n", lib.Name, err)
+				core.Log("尝试使用原始链接下载:", originalURL)
 				if err := core.DownloadFile(originalURL, filePath); err != nil {
-					fmt.Printf("原始链接下载也失败 %s: %v\n", lib.Name, err)
+					core.Logf("原始链接下载也失败 %s: %v\n", lib.Name, err)
 				} else {
-					fmt.Println("使用原始链接下载完成:", filePath)
+					core.Log("使用原始链接下载完成:", filePath)
 				}
 			} else {
-				fmt.Println("使用 BMCLAPI 下载完成:", filePath)
+				core.Log("使用 BMCLAPI 下载完成:", filePath)
 			}
 		}(lib, url, originalURL, filePath)
 	}

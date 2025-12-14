@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/autoinst/AutoInstall/core"
 	"golang.org/x/text/encoding/charmap"
 	"golang.org/x/text/encoding/simplifiedchinese"
 )
@@ -22,15 +23,15 @@ func WaitDownloads() {
 }
 
 func Search(MaxConnections int, Argsment string) {
-	fmt.Println("正在扫描可用的整合包...")
+	core.Log("正在扫描可用的整合包...")
 	pack, packType, err := detectPackFile()
 	if err != nil {
-		fmt.Println(err.Error())
+		core.Log(err.Error())
 		return
 	}
 
 	if err := installByType(packType, pack, MaxConnections, Argsment); err != nil {
-		fmt.Println("安装失败:", err)
+		core.Log("安装失败:", err)
 	}
 }
 

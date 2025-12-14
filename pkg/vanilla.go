@@ -43,6 +43,6 @@ func DownloadServerJar(version, loader, librariesDir string) error {
 	if err := core.DownloadFile(downloadURL, serverPath); err != nil {
 		return fmt.Errorf("无法下载服务端文件 %s: %v", serverPath, err)
 	}
-	fmt.Println("下载完成 Minecraft 服务端:", serverPath)
+	core.Log("下载完成 Minecraft 服务端:", serverPath)
 	return nil
 }

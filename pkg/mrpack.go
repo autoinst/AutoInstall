@@ -29,7 +29,7 @@ type ModrinthIndex struct {
 func Modrinth(file string, MaxCon int, Args string) {
 	overridesPath := filepath.Join("./", "overrides")
 	if err := moveOverrides(overridesPath); err != nil {
-		fmt.Println("移动 overrides 文件失败:", err)
+		core.Log("移动 overrides 文件失败:", err)
 		return
 	}
 
@@ -40,20 +40,20 @@ func Modrinth(file string, MaxCon int, Args string) {
 	indexPath := filepath.Join("./", idx)
 	indexFile, err := os.Open(indexPath)
 	if err != nil {
-		fmt.Println("未找到 modrinth.index.json")
+		core.Log("未找到 modrinth.index.json")
 		return
 	}
 	defer indexFile.Close()
 
 	byteValue, err := io.ReadAll(indexFile)
 	if err != nil {
-		fmt.Println("读取 modrinth.index.json 失败:", err)
+		core.Log("读取 modrinth.index.json 失败:", err)
 		return
 	}
 
 	var modrinthIndex ModrinthIndex
 	if err := json.Unmarshal(byteValue, &modrinthIndex); err != nil {
-		fmt.Println("解析 modrinth.index.json 失败:", err)
+		core.Log("解析 modrinth.index.json 失败:", err)
 		return
 	}
 	// 创建 inst.json 文件
@@ -78,11 +78,11 @@ func Modrinth(file string, MaxCon int, Args string) {
 	// 写入 inst.json 文件
 	jsonData, err := json.MarshalIndent(instConfig, "", "  ")
 	if err != nil {
-		fmt.Println("生成 inst.json 失败:", err)
+		core.Log("生成 inst.json 失败:", err)
 		return
 	}
 	if err := os.WriteFile("inst.json", jsonData, 0777); err != nil {
-		fmt.Println("写入 inst.json 失败:", err)
+		core.Log("写入 inst.json 失败:", err)
 		return
 	}
 
@@ -120,12 +120,12 @@ func Modrinth(file string, MaxCon int, Args string) {
 
 			var downloadErr error
 			for _, downloadURL := range file.Downloads {
-				fmt.Println("尝试下载:", downloadURL)
+				core.Log("尝试下载:", downloadURL)
 				downloadErr = core.DownloadFile(downloadURL, filePath)
 				if downloadErr == nil {
 					break
 				}
-				fmt.Printf("下载失败: %v, 尝试下一个链接\n", downloadErr)
+				core.Logf("下载失败: %v, 尝试下一个链接\n", downloadErr)
 			}
 			if downloadErr != nil {
 				errChan <- fmt.Errorf("所有下载链接均失败: %v", downloadErr)
@@ -139,7 +139,7 @@ func Modrinth(file string, MaxCon int, Args string) {
 
 	for err := range errChan {
 		if err != nil {
-			fmt.Println("下载出错:", err)
+			core.Log("下载出错:", err)
 		}
 	}
 

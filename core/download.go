@@ -28,7 +28,7 @@ func (pr *ProgressReader) Read(p []byte) (n int, err error) {
 	if now-pr.lastUpdatedTime >= pr.UpdateInterval || err == io.EOF {
 		pr.lastUpdatedTime = now
 		percent := float64(pr.Current) / float64(pr.Total) * 100
-		fmt.Printf("下载进度: %.2f%% (%s)\n", percent, pr.FilePath)
+		Logf("下载进度: %.2f%% (%s)\n", percent, pr.FilePath)
 	}
 	return
 }
@@ -40,7 +40,7 @@ func DownloadFile(url, filePath string) error {
 	var start int64 = 0
 	if err == nil {
 		start = fileInfo.Size()
-		fmt.Printf("文件已存在，尝试断点续传，已下载大小: %d 字节\n", start)
+		Logf("文件已存在，尝试断点续传，已下载大小: %d 字节\n", start)
 	} else if !os.IsNotExist(err) {
 		return fmt.Errorf("检查文件状态失败: %w", err)
 	}
@@ -48,7 +48,7 @@ func DownloadFile(url, filePath string) error {
 	for i := 0; i < maxRetries; i++ {
 		req, err := http.NewRequest("GET", url, nil)
 		if err != nil {
-			fmt.Printf("创建请求失败 %d/%d: %v\n", i+1, maxRetries, err)
+			Logf("创建请求失败 %d/%d: %v\n", i+1, maxRetries, err)
 			continue
 		}
 
@@ -60,31 +60,31 @@ func DownloadFile(url, filePath string) error {
 		resp, err := client.Do(req)
 
 		if err != nil {
-			fmt.Printf("尝试 %d/%d 下载失败: %v\n", i+1, maxRetries, err)
+			Logf("尝试 %d/%d 下载失败: %v\n", i+1, maxRetries, err)
 			continue
 		}
 		defer resp.Body.Close()
 
 		if resp.StatusCode == http.StatusNotFound {
-			fmt.Printf("文件未找到，跳过: %s\n", url)
+			Logf("文件未找到，跳过: %s\n", url)
 			return nil
 		}
 
 		if start > 0 && resp.StatusCode != http.StatusPartialContent {
-			fmt.Printf("服务器不支持断点续传，状态码: %d，尝试重新下载\n", resp.StatusCode)
+			Logf("服务器不支持断点续传，状态码: %d，尝试重新下载\n", resp.StatusCode)
 			start = 0
 			os.Remove(filePath) // 删除已存在的文件，重新下载
 			continue
 		}
 
 		if start == 0 && resp.StatusCode != http.StatusOK {
-			fmt.Printf("尝试 %d/%d，HTTP 状态码: %d\n", i+1, maxRetries, resp.StatusCode)
+			Logf("尝试 %d/%d，HTTP 状态码: %d\n", i+1, maxRetries, resp.StatusCode)
 			continue
 		}
 
 		total := resp.ContentLength + start
 		if total <= 0 {
-			fmt.Println("无法获取文件大小，将不显示进度")
+			Log("无法获取文件大小，将不显示进度")
 		}
 
 		var outFile *os.File
@@ -110,11 +110,11 @@ func DownloadFile(url, filePath string) error {
 
 		_, err = io.Copy(outFile, reader)
 		if err != nil {
-			fmt.Printf("写入失败 %d/%d: %v\n", i+1, maxRetries, err)
+			Logf("写入失败 %d/%d: %v\n", i+1, maxRetries, err)
 			continue
 		}
 
-		fmt.Println("下载完成！")
+		Log("下载完成！")
 		return nil
 	}
 
