@@ -45,6 +45,7 @@ func resolveCFDownloadURL(projectID, fileID int) (string, error) {
 	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("x-api-key", cfapiKey)
+	req.Header.Set("User-Agent", "autoinst/1.3.0")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return "", err
@@ -176,6 +177,8 @@ func CurseForge(file string, MaxCon int, Args string) {
 
 				url, err := resolveCFDownloadURL(entry.ProjectID, entry.FileID)
 				if err != nil {
+					apiUrl := fmt.Sprintf("https://api.curseforge.com/v1/mods/%d/files/%d/download-url", entry.ProjectID, entry.FileID)
+					core.RecordError(apiUrl, err, err.Error())
 					errChan <- err
 					return
 				}
@@ -192,6 +195,7 @@ func CurseForge(file string, MaxCon int, Args string) {
 				}
 				fmt.Println("尝试下载:", url)
 				if err := core.DownloadFile(url, dst); err != nil {
+					core.RecordError(url, err, "Download failed")
 					errChan <- fmt.Errorf("下载失败(Project %d, File %d): %v", entry.ProjectID, entry.FileID, err)
 					return
 				}

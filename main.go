@@ -16,6 +16,11 @@ func main() {
 	if gitversion == "" {
 		gitversion = "NaN"
 	}
+	if err := core.SetupLogger(); err != nil {
+		fmt.Println("无法初始化日志系统:", err)
+	}
+	defer core.CloseLogger()
+
 	cleaninst := core.Argument(gitversion)
 	core.Argument(gitversion)
 	os.MkdirAll(".autoinst/cache", os.ModePerm)
@@ -50,5 +55,15 @@ func main() {
 		fmt.Println("inst.json 文件不存在")
 	} else {
 		fmt.Println("无法访问 inst.json 文件:", err)
+	}
+
+	if len(core.DownloadErrors) > 0 {
+		fmt.Println("安装过程中出现错误，详情请查看日志。")
+		if core.LogFile != nil {
+			core.LogFile.WriteString("\n--- 错误汇总 ---\n")
+			for _, e := range core.DownloadErrors {
+				core.LogFile.WriteString(fmt.Sprintf("URL: %s\nError: %v\nResponse: %s\n----------------\n", e.URL, e.Err, e.Response))
+			}
+		}
 	}
 }

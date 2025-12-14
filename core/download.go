@@ -55,8 +55,7 @@ func DownloadFile(url, filePath string) error {
 		if start > 0 {
 			req.Header.Set("Range", "bytes="+strconv.FormatInt(start, 10)+"-")
 		}
-		var gitversion string
-		req.Header.Set("User-Agent", "AutoInstall/"+gitversion)
+		req.Header.Set("User-Agent", "autoinst/1.3.0")
 		client := &http.Client{}
 		resp, err := client.Do(req)
 
