@@ -4,5 +4,5 @@
     "loaderVersion": "21.1.123",
     "download": "bmclapi",
     "maxconnections": 10,
-    "argsment": "-Xmx{maxmen}M -Xms{maxmen}M"
+    "argsment": "-Xmx$(( (${SERVER_MEMORY:-4096}) - 1500 ))M -Xms$(( (${SERVER_MEMORY:-4096}) - 1500 ))M"
 }

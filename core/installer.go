@@ -11,22 +11,59 @@ import (
 	"strings"
 )
 
-func RunInstaller(installerPath string, loader string, version string, loaderVersion string, Download string, simpfun bool, mise bool) error {
+func getJavaMajor(version string) int {
+	v := strings.ToLower(version)
+
+	if len(v) >= 3 && v[2] == 'w' {
+		year, err := strconv.Atoi(v[:2])
+		if err == nil {
+			return year + 1
+		}
+	}
+
+	main := strings.Split(v, "-")[0]
+	parts := strings.Split(main, ".")
+	if len(parts) == 0 {
+		return 0
+	}
+
+	major, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return 0
+	}
+	return major
+}
+
+func RunInstaller(
+	installerPath string,
+	loader string,
+	version string,
+	loaderVersion string,
+	Download string,
+	simpfun bool,
+	mise bool,
+) error {
+
+	javaMajor := getJavaMajor(version)
 	var javaPath string
+
 	if simpfun {
+		if javaMajor >= 26 {
+			return fmt.Errorf("不支持 Minecraft %s（需要 Java 25）", version)
+		}
 		if mise {
 			var cmd *exec.Cmd
-			if version < "1.17" {
+			switch {
+			case javaMajor < 17:
 				cmd = exec.Command("mise", "use", "-g", "java@zulu-8.86.0.25")
-			} else if version >= "1.17" && version <= "1.20.3" {
+			case javaMajor < 21:
 				cmd = exec.Command("mise", "use", "-g", "java@zulu-17.58.21")
-			} else {
+			case javaMajor < 26:
 				cmd = exec.Command("mise", "use", "-g", "java@zulu-21.42.19")
+			default:
+				cmd = exec.Command("mise", "use", "-g", "java@zulu-25")
 			}
-			err := cmd.Run()
-			if err != nil {
-				Log("mise use failed:", err)
-			}
+			_ = cmd.Run()
 			javaPath = "java"
 		} else {
 			javaPath = "/usr/bin/jdk/jdk1.8.0_361/bin/java"
@@ -35,12 +72,15 @@ func RunInstaller(installerPath string, loader string, version string, loaderVer
 		javaPath = "java"
 	}
 	var cmd *exec.Cmd
+
 	if Download == "bmclapi" {
-		if loader == "forge" {
-			cmd = exec.Command(javaPath, "-jar", installerPath, "--installServer", "--mirror", "https://bmclapi2.bangbang93.com/maven/")
-		} else if loader == "neoforge" {
-			cmd = exec.Command(javaPath, "-jar", installerPath, "--installServer", "--mirror", "https://bmclapi2.bangbang93.com/maven/")
-		} else if loader == "fabric" {
+		switch loader {
+		case "forge", "neoforge":
+			cmd = exec.Command(javaPath, "-jar", installerPath,
+				"--installServer",
+				"--mirror", "https://bmclapi2.bangbang93.com/maven/",
+			)
+		case "fabric":
 			cmd = exec.Command(
 				javaPath, "-jar", installerPath, "server",
 				"-mavenurl", "https://bmclapi2.bangbang93.com/maven/",
@@ -48,160 +88,127 @@ func RunInstaller(installerPath string, loader string, version string, loaderVer
 				"-mcversion", version,
 				"-loader", loaderVersion,
 			)
-		} else {
+		default:
 			cmd = exec.Command(javaPath, "-jar", installerPath)
 		}
 	} else {
-		if loader == "forge" {
+		switch loader {
+		case "forge", "neoforge":
 			cmd = exec.Command(javaPath, "-jar", installerPath, "--installServer")
-		} else if loader == "neoforge" {
-			cmd = exec.Command(javaPath, "-jar", installerPath, "--installServer")
-		} else if loader == "fabric" {
+		case "fabric":
 			cmd = exec.Command(
 				javaPath, "-jar", installerPath, "server",
 				"-mcversion", version,
 				"-loader", loaderVersion,
 			)
-		} else {
+		default:
 			cmd = exec.Command(javaPath, "-jar", installerPath)
 		}
 	}
 
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return fmt.Errorf("无法获取标准输出: %v", err)
-	}
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return fmt.Errorf("无法获取标准错误: %v", err)
-	}
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("启动命令失败: %v", err)
-	}
-	go func() {
-		io.Copy(os.Stdout, stdout)
-	}()
-	go func() {
-		io.Copy(os.Stderr, stderr)
-	}()
+	stdout, _ := cmd.StdoutPipe()
+	stderr, _ := cmd.StderrPipe()
 
-	if err := cmd.Wait(); err != nil {
-		return fmt.Errorf("命令执行失败: %v", err)
+	if err := cmd.Start(); err != nil {
+		return err
 	}
-	return nil
+
+	go io.Copy(os.Stdout, stdout)
+	go io.Copy(os.Stderr, stderr)
+
+	return cmd.Wait()
 }
 
 func FindJava() (string, bool, bool) {
 	simpfun := false
 	mise := false
+
 	if runtime.GOOS == "linux" {
 		if _, err := os.Stat("/home/container/.aio"); err == nil {
 			simpfun = true
 		}
-		javaPath := "/usr/bin/jdk/jdk1.8.0_361/bin/java"
-		if _, err := os.Stat(javaPath); err == nil {
+		if _, err := os.Stat("/usr/bin/jdk/jdk1.8.0_361/bin/java"); err == nil {
 			simpfun = true
 		}
 	}
 
 	if simpfun {
-		cmd := exec.Command("mise", "-v")
-		if err := cmd.Run(); err == nil {
+		if err := exec.Command("mise", "-v").Run(); err == nil {
 			mise = true
 		}
 	}
 
-	javaHome := os.Getenv("JAVA_HOME")
-	if javaHome != "" {
-		javaPath := filepath.Join(javaHome, "bin", "java")
-		if _, err := os.Stat(javaPath); err == nil {
-			return javaPath, simpfun, mise
+	if javaHome := os.Getenv("JAVA_HOME"); javaHome != "" {
+		java := filepath.Join(javaHome, "bin", "java")
+		if _, err := os.Stat(java); err == nil {
+			return java, simpfun, mise
 		}
 	}
 
-	cmd := exec.Command("java", "-version")
-	output, err := cmd.CombinedOutput()
-	if err == nil && strings.Contains(string(output), "version") {
+	if err := exec.Command("java", "-version").Run(); err == nil {
 		return "java", simpfun, mise
 	}
 
 	return "", simpfun, mise
 }
 
-func RunScript(Version string, Loader string, LoaderVersion string, simpfun bool, mise bool, argsment string) {
-	// 删除旧的 run.sh
-	if _, err := os.Stat("run.sh"); err == nil {
-		if err := os.Remove("run.sh"); err != nil {
-			Log("删除旧的 run.sh 失败:", err)
-			return
-		}
-	}
+func RunScript(
+	Version string,
+	Loader string,
+	LoaderVersion string,
+	simpfun bool,
+	mise bool,
+	argsment string,
+) {
+	_ = os.Remove("run.sh")
 
-	memStr := os.Getenv("SERVER_MEMORY")
-	mem, err := strconv.Atoi(memStr)
+	mem, err := strconv.Atoi(os.Getenv("SERVER_MEMORY"))
 	if err != nil || mem <= 1500 {
-		fmt.Printf("SERVER_MEMORY无效")
 		mem = 4096 + 1500
 	}
-	maxmen := mem - 1500
-	modifiedArgsment := strings.ReplaceAll(argsment, "{maxmen}", strconv.Itoa(maxmen))
-
-	var scriptContent string
+	maxmem := mem - 1500
+	argsment = strings.ReplaceAll(argsment, "{maxmen}", strconv.Itoa(maxmem))
+	javaMajor := getJavaMajor(Version)
 	var javaPath string
 
 	if simpfun {
-		if Version < "1.17" {
-			javaPath = "/usr/bin/jdk/jdk1.8.0_361/bin/java"
-		} else if Version >= "1.17" && Version <= "1.20.3" {
-			javaPath = "/usr/bin/jdk/jdk-17.0.6/bin/java"
-		} else {
-			javaPath = "/usr/bin/jdk/jdk-21.0.2/bin/java"
+		if javaMajor >= 26 {
+			Log("不支持 Minecraft", Version, "（需要 Java 25）")
+			return
 		}
 
-		switch Loader {
-		case "forge":
-			if Version > "1.17" {
-				scriptContent = fmt.Sprintf("%s %s @libraries/net/minecraftforge/forge/%s-%s/unix_args.txt \"$@\"", javaPath, modifiedArgsment, Version, LoaderVersion)
-			} else {
-				scriptContent = fmt.Sprintf("%s %s -jar forge-%s-%s.jar", javaPath, modifiedArgsment, Version, LoaderVersion)
-			}
-		case "neoforge":
-			scriptContent = fmt.Sprintf("%s %s @libraries/net/neoforged/neoforge/%s/unix_args.txt \"$@\"", javaPath, modifiedArgsment, LoaderVersion)
-		case "fabric":
-			scriptContent = fmt.Sprintf("%s %s -jar fabric-server-launch.jar", javaPath, modifiedArgsment)
+		switch {
+		case javaMajor < 17:
+			javaPath = "/usr/bin/jdk/jdk1.8.0_361/bin/java"
+		case javaMajor < 21:
+			javaPath = "/usr/bin/jdk/jdk-17.0.6/bin/java"
+		case javaMajor < 26:
+			javaPath = "/usr/bin/jdk/jdk-21.0.2/bin/java"
+		default:
+			javaPath = "/usr/bin/jdk/jdk-25/bin/java"
 		}
 	} else {
-		switch Loader {
-		case "forge":
-			if Version < "1.17" {
-				scriptContent = fmt.Sprintf("java %s -jar forge-%s-%s.jar", modifiedArgsment, Version, LoaderVersion)
-			} else {
-				scriptContent = fmt.Sprintf("java %s @libraries/net/minecraftforge/forge/%s-%s/unix_args.txt \"$@\"", modifiedArgsment, Version, LoaderVersion)
-			}
-		case "neoforge":
-			scriptContent = fmt.Sprintf("java %s @libraries/net/neoforged/neoforge/%s/unix_args.txt \"$@\"", modifiedArgsment, LoaderVersion)
-		case "fabric":
-			scriptContent = fmt.Sprintf("java %s -jar fabric-server-launch.jar", modifiedArgsment)
+		javaPath = "java"
+	}
+
+	var script string
+
+	switch Loader {
+	case "forge":
+		if javaMajor < 17 {
+			script = fmt.Sprintf("%s %s -jar forge-%s-%s.jar",
+				javaPath, argsment, Version, LoaderVersion)
+		} else {
+			script = fmt.Sprintf("%s %s @libraries/net/minecraftforge/forge/%s-%s/unix_args.txt \"$@\"",
+				javaPath, argsment, Version, LoaderVersion)
 		}
+	case "neoforge":
+		script = fmt.Sprintf("%s %s @libraries/net/neoforged/neoforge/%s/unix_args.txt \"$@\"",
+			javaPath, argsment, LoaderVersion)
+	case "fabric":
+		script = fmt.Sprintf("%s %s -jar fabric-server-launch.jar",
+			javaPath, argsment)
 	}
 
-	// 写入 run.sh
-	file, err := os.Create("run.sh")
-	if err != nil {
-		Log("创建文件失败:", err)
-		return
-	}
-	defer file.Close()
-
-	_, err = file.WriteString(scriptContent)
-	if err != nil {
-		Log("写入文件失败:", err)
-		return
-	}
-
-	err = os.Chmod("run.sh", 0777)
-	if err != nil {
-		Log("修改权限失败:", err)
-		return
-	}
+	_ = os.WriteFile("run.sh", []byte(script), 0777)
 }
