@@ -11,27 +11,42 @@ import (
 	"strings"
 )
 
-func getJavaMajor(version string) int {
-	v := strings.ToLower(version)
+func installerJava(simpfun bool, mise bool) string {
+	if simpfun {
+		if mise {
+			_ = exec.Command("mise", "use", "-g", "java@zulu-8.86.0.25").Run()
+			return "java"
+		}
+		return "/usr/bin/jdk/jdk1.8.0_361/bin/java"
+	}
+	return "java"
+}
 
-	if len(v) >= 3 && v[2] == 'w' {
-		year, err := strconv.Atoi(v[:2])
-		if err == nil {
-			return year + 1
+func runtimeJava(mc string) int {
+	mc = strings.Split(mc, "-")[0]
+
+	if strings.Contains(mc, "w") {
+		return 21
+	}
+
+	if strings.HasPrefix(mc, "1.") {
+		parts := strings.Split(mc, ".")
+		if len(parts) >= 2 {
+			minor, _ := strconv.Atoi(parts[1])
+			switch {
+			case minor <= 16:
+				return 8
+			case minor <= 17:
+				return 16
+			case minor <= 20:
+				return 17
+			default:
+				return 21
+			}
 		}
 	}
 
-	main := strings.Split(v, "-")[0]
-	parts := strings.Split(main, ".")
-	if len(parts) == 0 {
-		return 0
-	}
-
-	major, err := strconv.Atoi(parts[0])
-	if err != nil {
-		return 0
-	}
-	return major
+	return 21
 }
 
 func RunInstaller(
@@ -44,49 +59,25 @@ func RunInstaller(
 	mise bool,
 ) error {
 
-	javaMajor := getJavaMajor(version)
-	var javaPath string
+	javaPath := installerJava(simpfun, mise)
 
-	if simpfun {
-		if javaMajor >= 26 {
-			return fmt.Errorf("不支持 Minecraft %s（需要 Java 25）", version)
-		}
-		if mise {
-			var cmd *exec.Cmd
-			switch {
-			case javaMajor < 17:
-				cmd = exec.Command("mise", "use", "-g", "java@zulu-8.86.0.25")
-			case javaMajor < 21:
-				cmd = exec.Command("mise", "use", "-g", "java@zulu-17.58.21")
-			case javaMajor < 26:
-				cmd = exec.Command("mise", "use", "-g", "java@zulu-21.42.19")
-			default:
-				cmd = exec.Command("mise", "use", "-g", "java@zulu-25")
-			}
-			_ = cmd.Run()
-			javaPath = "java"
-		} else {
-			javaPath = "/usr/bin/jdk/jdk1.8.0_361/bin/java"
-		}
-	} else {
-		javaPath = "java"
-	}
 	var cmd *exec.Cmd
 
 	if Download == "bmclapi" {
 		switch loader {
 		case "forge", "neoforge":
-			cmd = exec.Command(javaPath, "-jar", installerPath,
+			cmd = exec.Command(
+				javaPath, "-jar", installerPath,
 				"--installServer",
 				"--mirror", "https://bmclapi2.bangbang93.com/maven/",
 			)
 		case "fabric":
 			cmd = exec.Command(
 				javaPath, "-jar", installerPath, "server",
-				"-mavenurl", "https://bmclapi2.bangbang93.com/maven/",
-				"-metaurl", "https://bmclapi2.bangbang93.com/fabric-meta/",
 				"-mcversion", version,
 				"-loader", loaderVersion,
+				"-mavenurl", "https://bmclapi2.bangbang93.com/maven/",
+				"-metaurl", "https://bmclapi2.bangbang93.com/fabric-meta/",
 			)
 		default:
 			cmd = exec.Command(javaPath, "-jar", installerPath)
@@ -160,6 +151,7 @@ func RunScript(
 	mise bool,
 	argsment string,
 ) {
+
 	_ = os.Remove("run.sh")
 
 	mem, err := strconv.Atoi(os.Getenv("SERVER_MEMORY"))
@@ -168,24 +160,20 @@ func RunScript(
 	}
 	maxmem := mem - 1500
 	argsment = strings.ReplaceAll(argsment, "{maxmen}", strconv.Itoa(maxmem))
-	javaMajor := getJavaMajor(Version)
+
+	javaMajor := runtimeJava(Version)
 	var javaPath string
 
 	if simpfun {
-		if javaMajor >= 26 {
-			Log("不支持 Minecraft", Version, "（需要 Java 25）")
-			return
-		}
-
-		switch {
-		case javaMajor < 17:
+		switch javaMajor {
+		case 8:
 			javaPath = "/usr/bin/jdk/jdk1.8.0_361/bin/java"
-		case javaMajor < 21:
+		case 16:
+			javaPath = "/usr/bin/jdk/jdk-16/bin/java"
+		case 17:
 			javaPath = "/usr/bin/jdk/jdk-17.0.6/bin/java"
-		case javaMajor < 26:
-			javaPath = "/usr/bin/jdk/jdk-21.0.2/bin/java"
 		default:
-			javaPath = "/usr/bin/jdk/jdk-25/bin/java"
+			javaPath = "/usr/bin/jdk/jdk-21.0.2/bin/java"
 		}
 	} else {
 		javaPath = "java"
@@ -195,20 +183,31 @@ func RunScript(
 
 	switch Loader {
 	case "forge":
-		if javaMajor < 17 {
-			script = fmt.Sprintf("%s %s -jar forge-%s-%s.jar",
-				javaPath, argsment, Version, LoaderVersion)
+		if javaMajor <= 8 {
+			script = fmt.Sprintf(
+				"%s %s -jar forge-%s-%s.jar",
+				javaPath, argsment, Version, LoaderVersion,
+			)
 		} else {
-			script = fmt.Sprintf("%s %s @libraries/net/minecraftforge/forge/%s-%s/unix_args.txt \"$@\"",
-				javaPath, argsment, Version, LoaderVersion)
+			script = fmt.Sprintf(
+				"%s %s @libraries/net/minecraftforge/forge/%s-%s/unix_args.txt \"$@\"",
+				javaPath, argsment, Version, LoaderVersion,
+			)
 		}
+
 	case "neoforge":
-		script = fmt.Sprintf("%s %s @libraries/net/neoforged/neoforge/%s/unix_args.txt \"$@\"",
-			javaPath, argsment, LoaderVersion)
+		script = fmt.Sprintf(
+			"%s %s @libraries/net/neoforged/neoforge/%s/unix_args.txt \"$@\"",
+			javaPath, argsment, LoaderVersion,
+		)
+
 	case "fabric":
-		script = fmt.Sprintf("%s %s -jar fabric-server-launch.jar",
-			javaPath, argsment)
+		script = fmt.Sprintf(
+			"%s %s -jar fabric-server-launch.jar",
+			javaPath, argsment,
+		)
 	}
 
+	script = "#!/bin/bash\n" + script + "\n"
 	_ = os.WriteFile("run.sh", []byte(script), 0777)
 }

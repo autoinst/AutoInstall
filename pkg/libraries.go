@@ -73,7 +73,7 @@ func DownloadLibraries(versionInfo core.VersionInfo, librariesDir string, maxCon
 					core.Log("使用原始链接下载完成:", filePath)
 				}
 			} else {
-				core.Log("使用 BMCLAPI 下载完成:", filePath)
+				core.Log("下载完成:", filePath)
 			}
 		}(lib, url, originalURL, filePath)
 	}
