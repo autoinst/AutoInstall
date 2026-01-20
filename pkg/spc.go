@@ -28,12 +28,12 @@ func SPCInstall(file string, MaxCon int, Args string) {
 	loaderVersion, okLV := vars["MODLOADER_VERSION"]
 
 	if !okV || version == "" || !okL || loader == "" || !okLV || loaderVersion == "" {
-		core.Log("错误：variables.txt 中缺少必要配置项 (MINECRAFT_VERSION, MODLOADER 或 MODLOADER_VERSION)")
+		core.Log("错误：安装文件 variables.txt 中缺少必要配置项")
 		core.Log("请检查您的 variables.txt 是否包含以下内容：")
-		core.Log("MINECRAFT_VERSION=1.20.1")
-		core.Log("MODLOADER=fabric")
-		core.Log("MODLOADER_VERSION=0.15.7")
-		return
+		core.Log("MINECRAFT_VERSION")
+		core.Log("MODLOADER")
+		core.Log("MODLOADER_VERSION")
+		os.Exit(128)
 	}
 
 	instConfig := core.InstConfig{
