@@ -206,6 +206,11 @@ func RunScript(
 			"%s %s -jar fabric-server-launch.jar",
 			javaPath, argsment,
 		)
+	case "vanilla":
+		script = fmt.Sprintf(
+			"%s %s -jar server.jar",
+			javaPath, argsment,
+		)
 	}
 
 	script = "#!/bin/bash\n" + script + "\n"
