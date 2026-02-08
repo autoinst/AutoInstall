@@ -114,6 +114,9 @@ func installByType(packType, path string, MaxConnections int, Argsment string) e
 
 // installZipArchive 尝试识别 zip 是 CurseForge 还是 SPC 格式
 func installZipArchive(file string, MaxConnections int, Argsment string) error {
+	if zipContains(file, "variables.txt") {
+		return installSPCArchive(file, MaxConnections, Argsment)
+	}
 	if zipContains(file, "manifest.json") {
 		return installCurseForgeArchive(file, MaxConnections, Argsment)
 	}
