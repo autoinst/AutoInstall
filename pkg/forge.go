@@ -40,7 +40,7 @@ func ForgeB(config core.InstConfig, simpfun bool, mise bool) {
 		)
 	} else {
 		installerURL = fmt.Sprintf(
-			"https://maven.minecraftforge.net/maven/net/minecraftforge/forge/%s-%s/forge-%s-%s-installer.jar",
+			"https://maven.minecraftforge.net/net/minecraftforge/forge/%s-%s/forge-%s-%s-installer.jar",
 			config.Version, config.LoaderVersion, config.Version, config.LoaderVersion,
 		)
 	}

@@ -2,6 +2,7 @@ package pkg
 
 import (
 	"archive/zip"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -48,6 +49,9 @@ func detectPackFile() (path string, packType string, err error) {
 			return "modrinth.index.json", "modrinth-plain", nil
 		}
 		if _, err := os.Stat("manifest.json"); err == nil {
+			if manifestIsSPCFromFile("manifest.json") {
+				return "manifest.json", "spc-plain", nil
+			}
 			return "manifest.json", "curseforge-plain", nil
 		}
 		return "", "", errors.New("未找到整合包")
@@ -115,9 +119,59 @@ func installByType(packType, path string, MaxConnections int, Argsment string) e
 // installZipArchive 尝试识别 zip 是 CurseForge 还是 SPC 格式
 func installZipArchive(file string, MaxConnections int, Argsment string) error {
 	if zipContains(file, "manifest.json") {
+		if manifestIsSPCFromZip(file) {
+			return installSPCArchive(file, MaxConnections, Argsment)
+		}
 		return installCurseForgeArchive(file, MaxConnections, Argsment)
 	}
 	return installSPCArchive(file, MaxConnections, Argsment)
+}
+
+func manifestIsSPCFromFile(path string) bool {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	var m map[string]interface{}
+	if err := json.Unmarshal(b, &m); err != nil {
+		return false
+	}
+	_, ok := m["serverPackCreatorVersion"]
+	return ok
+}
+
+func manifestIsSPCFromZip(zipPath string) bool {
+	r, err := zip.OpenReader(zipPath)
+	if err != nil {
+		return false
+	}
+	defer r.Close()
+	for _, f := range r.File {
+		name := f.Name
+		if f.NonUTF8 {
+			if fixed, ok := tryFixZipName(name); ok {
+				name = fixed
+			}
+		}
+		if filepath.Base(name) == "manifest.json" {
+			rc, err := f.Open()
+			if err != nil {
+				continue
+			}
+			b, err := io.ReadAll(rc)
+			_ = rc.Close()
+			if err != nil {
+				continue
+			}
+			var m map[string]interface{}
+			if err := json.Unmarshal(b, &m); err == nil {
+				if _, ok := m["serverPackCreatorVersion"]; ok {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 func installCurseForgeArchive(file string, MaxConnections int, Argsment string) error {
