@@ -63,7 +63,7 @@ func DownloadServerJar(version, loader, librariesDir string) error {
 }
 
 func getOfficialServerJarURL(version string) (string, error) {
-	resp, err := http.Get("https://launcher.mojang.com/mc/game/version_manifest.json")
+	resp, err := http.Get("https://launchermeta.mojang.com/mc/game/version_manifest.json")
 	if err != nil {
 		return "", err
 	}
