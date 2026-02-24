@@ -88,6 +88,11 @@ func FabricB(config core.InstConfig, simpfun bool, mise bool) {
 		return
 	}
 
+	if err := DownloadServerJar(config.Version, config.Loader, libsDir); err != nil {
+		core.Log("下载服务端失败:", err)
+		return
+	}
+
 	var libraryFiles []string
 	var wg sync.WaitGroup
 
