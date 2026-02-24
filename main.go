@@ -10,7 +10,6 @@ import (
 )
 
 var gitversion string
-var cfapiKey string
 
 func main() {
 	if gitversion == "" {
