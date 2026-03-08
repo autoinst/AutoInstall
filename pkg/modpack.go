@@ -95,36 +95,62 @@ func packTypeFromExt(path string) string {
 }
 
 func installByType(packType, path string, MaxConnections int, Argsment string) error {
+	bundleName := bundleNameFromPath(path)
 	switch packType {
 	case "spc-plain":
-		SPCInstall(path, MaxConnections, Argsment)
+		SPCInstall(path, MaxConnections, Argsment, bundleName)
 		return nil
 	case "modrinth-plain":
-		Modrinth(path, MaxConnections, Argsment)
+		Modrinth(path, MaxConnections, Argsment, bundleName)
 		return nil
 	case "curseforge-plain":
-		CurseForge(path, MaxConnections, Argsment)
+		CurseForge(path, MaxConnections, Argsment, bundleName)
 		return nil
 	case "modrinth":
-		return installModrinthArchive(path, MaxConnections, Argsment)
+		return installModrinthArchive(path, MaxConnections, Argsment, bundleName)
 	case "curseforge-zip":
-		return installCurseForgeArchive(path, MaxConnections, Argsment)
+		return installCurseForgeArchive(path, MaxConnections, Argsment, bundleName)
 	case "zip":
-		return installZipArchive(path, MaxConnections, Argsment)
+		return installZipArchive(path, MaxConnections, Argsment, bundleName)
 	default:
 		return fmt.Errorf("无法识别的整合包类型: %s", packType)
 	}
 }
 
+func bundleNameFromPath(path string) string {
+	cleanPath := strings.TrimSpace(path)
+	if cleanPath == "" {
+		return "modpack"
+	}
+	base := filepath.Base(cleanPath)
+	if strings.EqualFold(base, "modrinth.index.json") || strings.EqualFold(base, "manifest.json") || strings.EqualFold(base, "variables.txt") {
+		wd, err := os.Getwd()
+		if err == nil {
+			base = filepath.Base(wd)
+		}
+	}
+	ext := filepath.Ext(base)
+	if ext != "" {
+		base = strings.TrimSuffix(base, ext)
+	}
+	if base == "" || base == "." {
+		return "modpack"
+	}
+	return base
+}
+
 // installZipArchive 尝试识别 zip 是 CurseForge 还是 SPC 格式
-func installZipArchive(file string, MaxConnections int, Argsment string) error {
+func installZipArchive(file string, MaxConnections int, Argsment string, bundleName string) error {
+	if zipContains(file, "modrinth.index.json") {
+		return installModrinthArchive(file, MaxConnections, Argsment, bundleName)
+	}
 	if zipContains(file, "manifest.json") {
 		if manifestIsSPCFromZip(file) {
-			return installSPCArchive(file, MaxConnections, Argsment)
+			return installSPCArchive(file, MaxConnections, Argsment, bundleName)
 		}
-		return installCurseForgeArchive(file, MaxConnections, Argsment)
+		return installCurseForgeArchive(file, MaxConnections, Argsment, bundleName)
 	}
-	return installSPCArchive(file, MaxConnections, Argsment)
+	return installSPCArchive(file, MaxConnections, Argsment, bundleName)
 }
 
 func manifestIsSPCFromFile(path string) bool {
@@ -174,7 +200,7 @@ func manifestIsSPCFromZip(zipPath string) bool {
 	return false
 }
 
-func installCurseForgeArchive(file string, MaxConnections int, Argsment string) error {
+func installCurseForgeArchive(file string, MaxConnections int, Argsment string, bundleName string) error {
 	if err := extractZip(file, nil); err != nil {
 		return fmt.Errorf("解压失败: %w", err)
 	}
@@ -182,11 +208,11 @@ func installCurseForgeArchive(file string, MaxConnections int, Argsment string) 
 	if !ok {
 		return errors.New("解压后未找到 manifest.json")
 	}
-	CurseForge(manifestPath, MaxConnections, Argsment)
+	CurseForge(manifestPath, MaxConnections, Argsment, bundleName)
 	return nil
 }
 
-func installSPCArchive(file string, MaxConnections int, Argsment string) error {
+func installSPCArchive(file string, MaxConnections int, Argsment string, bundleName string) error {
 	skipScripts := map[string]struct{}{"start.sh": {}, "run.sh": {}}
 	if err := extractZip(file, skipScripts); err != nil {
 		return fmt.Errorf("解压失败: %w", err)
@@ -195,11 +221,11 @@ func installSPCArchive(file string, MaxConnections int, Argsment string) error {
 	if !ok {
 		return errors.New("解压后未找到 variables.txt")
 	}
-	SPCInstall(variablesPath, MaxConnections, Argsment)
+	SPCInstall(variablesPath, MaxConnections, Argsment, bundleName)
 	return nil
 }
 
-func installModrinthArchive(file string, MaxConnections int, Argsment string) error {
+func installModrinthArchive(file string, MaxConnections int, Argsment string, bundleName string) error {
 	if err := extractZip(file, nil); err != nil {
 		return fmt.Errorf("解压失败: %w", err)
 	}
@@ -207,7 +233,7 @@ func installModrinthArchive(file string, MaxConnections int, Argsment string) er
 	if !ok {
 		return errors.New("解压后未找到 modrinth.index.json")
 	}
-	Modrinth(indexPath, MaxConnections, Argsment)
+	Modrinth(indexPath, MaxConnections, Argsment, bundleName)
 	return nil
 }
 

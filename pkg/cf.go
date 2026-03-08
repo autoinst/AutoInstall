@@ -45,7 +45,6 @@ func (e *CFError) Error() string {
 func resolveCFDownloadURL(projectID, fileID int) (string, error) {
 	if cfapiKey == "" {
 		return "", fmt.Errorf("缺少 CF_API_KEY")
-		os.Exit(128)
 	}
 	// 直接获取下载直链
 	req, err := http.NewRequest("GET", fmt.Sprintf("https://api.curseforge.com/v1/mods/%d/files/%d/download-url", projectID, fileID), nil)
@@ -76,7 +75,7 @@ func resolveCFDownloadURL(projectID, fileID int) (string, error) {
 	return out.Data, nil
 }
 
-func CurseForge(file string, MaxCon int, Args string) {
+func CurseForge(file string, MaxCon int, Args string, bundleName string) {
 	mf := "manifest.json"
 	if file != "" && strings.HasSuffix(strings.ToLower(file), ".json") {
 		mf = file
@@ -153,6 +152,7 @@ func CurseForge(file string, MaxCon int, Args string) {
 	}
 
 	if len(manifest.Files) == 0 {
+		runInstalledModFilter(bundleName)
 		return
 	}
 
@@ -222,5 +222,7 @@ func CurseForge(file string, MaxCon int, Args string) {
 				core.Log("下载出错:", err)
 			}
 		}
+
+		runInstalledModFilter(bundleName)
 	}()
 }

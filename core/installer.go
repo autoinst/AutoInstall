@@ -2,7 +2,6 @@ package core
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -97,17 +96,20 @@ func RunInstaller(
 		}
 	}
 
-	stdout, _ := cmd.StdoutPipe()
-	stderr, _ := cmd.StderrPipe()
+	stdoutWriter := newStreamLogWriter("installer.stdout", os.Stdout)
+	stderrWriter := newStreamLogWriter("installer.stderr", os.Stderr)
+	cmd.Stdout = stdoutWriter
+	cmd.Stderr = stderrWriter
+
+	Logf("运行安装器命令: %s\n", strings.Join(cmd.Args, " "))
 
 	if err := cmd.Start(); err != nil {
 		return err
 	}
-
-	go io.Copy(os.Stdout, stdout)
-	go io.Copy(os.Stderr, stderr)
-
-	return cmd.Wait()
+	err := cmd.Wait()
+	stdoutWriter.Flush()
+	stderrWriter.Flush()
+	return err
 }
 
 func FindJava() (string, bool, bool) {

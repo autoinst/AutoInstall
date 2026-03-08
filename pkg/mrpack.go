@@ -26,7 +26,7 @@ type ModrinthIndex struct {
 	} `json:"dependencies"`
 }
 
-func Modrinth(file string, MaxCon int, Args string) {
+func Modrinth(file string, MaxCon int, Args string, bundleName string) {
 	overridesPath := filepath.Join("./", "overrides")
 	if err := moveOverrides(overridesPath); err != nil {
 		core.Log("移动 overrides 文件失败:", err)
@@ -142,6 +142,8 @@ func Modrinth(file string, MaxCon int, Args string) {
 			core.Log("下载出错:", err)
 		}
 	}
+
+	runInstalledModFilter(bundleName)
 
 	_ = os.Remove(indexFile.Name())
 }

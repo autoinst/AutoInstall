@@ -11,6 +11,7 @@
 
 AutoInstall使用镜像源[BMCLAPI](https://bmclapidoc.bangbang93.com/)，使得在国内也能像各大启动器快速安装完成  
 支持Forge,NeoForge,Fabric,Vanilla的安装，免受Read times out   
+感谢[DeEarthX](https://github.com/Tianpao/DeEarthX)为排除客户端Mod提供了参考
 
 ## 安装
 > [!WARNING]

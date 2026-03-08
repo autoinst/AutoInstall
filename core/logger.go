@@ -1,7 +1,9 @@
 package core
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -71,6 +73,63 @@ func logToBoth(msg string, skip int) {
 			LogFile.WriteString(logLine)
 		}
 	}
+}
+
+type streamLogWriter struct {
+	console io.Writer
+	source  string
+	buf     bytes.Buffer
+	mu      sync.Mutex
+}
+
+func newStreamLogWriter(source string, console io.Writer) *streamLogWriter {
+	return &streamLogWriter{console: console, source: source}
+}
+
+func (w *streamLogWriter) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	n, err := w.console.Write(p)
+	if len(p) == 0 {
+		return n, err
+	}
+
+	_, _ = w.buf.Write(p)
+	w.flushCompletedLinesLocked()
+	return n, err
+}
+
+func (w *streamLogWriter) Flush() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	if w.buf.Len() == 0 {
+		return
+	}
+	writeLogLine(w.source, strings.TrimRight(w.buf.String(), "\r\n"))
+	w.buf.Reset()
+}
+
+func (w *streamLogWriter) flushCompletedLinesLocked() {
+	for {
+		line, err := w.buf.ReadString('\n')
+		if err != nil {
+			if line != "" {
+				_, _ = w.buf.WriteString(line)
+			}
+			return
+		}
+		writeLogLine(w.source, strings.TrimRight(line, "\r\n"))
+	}
+}
+
+func writeLogLine(source, msg string) {
+	if LogFile == nil || msg == "" {
+		return
+	}
+	timestamp := time.Now().Format("2006-01-02 15:04:05")
+	LogFile.WriteString(fmt.Sprintf("[%s][%s] %s\n", timestamp, source, msg))
 }
 
 func RecordError(url string, err error, response string) {

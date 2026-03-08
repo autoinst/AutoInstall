@@ -9,7 +9,7 @@ import (
 	"github.com/autoinst/AutoInstall/core"
 )
 
-func SPCInstall(file string, MaxCon int, Args string) {
+func SPCInstall(file string, MaxCon int, Args string, bundleName string) {
 	varsFile := "variables.txt"
 	if file != "" && strings.HasSuffix(strings.ToLower(file), ".txt") {
 		varsFile = file
@@ -54,6 +54,8 @@ func SPCInstall(file string, MaxCon int, Args string) {
 		core.Log("写入 inst.json 文件失败:", err)
 		return
 	}
+
+	runInstalledModFilter(bundleName)
 }
 
 func readVariables(filePath string) (map[string]string, error) {
