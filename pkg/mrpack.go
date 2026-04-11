@@ -18,12 +18,29 @@ type ModrinthIndex struct {
 		Env       map[string]string `json:"env"`
 		Downloads []string          `json:"downloads"`
 	} `json:"files"`
-	Dependencies struct {
-		Minecraft string `json:"minecraft"`
-		NeoForge  string `json:"neoforge"`
-		Forge     string `json:"forge"`
-		Fabric    string `json:"fabric"`
-	} `json:"dependencies"`
+	Dependencies ModrinthDependencies `json:"dependencies"`
+}
+
+type ModrinthDependencies struct {
+	Minecraft    string
+	NeoForge     string
+	Forge        string
+	Fabric       string
+	FabricLoader string
+}
+
+func (d *ModrinthDependencies) UnmarshalJSON(data []byte) error {
+	var raw map[string]string
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	d.Minecraft = raw["minecraft"]
+	d.NeoForge = raw["neoforge"]
+	d.Forge = raw["forge"]
+	d.Fabric = raw["fabric"]
+	d.FabricLoader = raw["fabric-loader"]
+	return nil
 }
 
 func Modrinth(file string, MaxCon int, Args string, bundleName string) {
@@ -56,23 +73,37 @@ func Modrinth(file string, MaxCon int, Args string, bundleName string) {
 		core.Log("解析 modrinth.index.json 失败:", err)
 		return
 	}
+	minecraftVersion := modrinthIndex.Dependencies.Minecraft
+	loaderVersion := modrinthIndex.Dependencies.NeoForge
+	loaderName := ""
+	switch {
+	case modrinthIndex.Dependencies.NeoForge != "":
+		loaderName = "neoforge"
+		loaderVersion = modrinthIndex.Dependencies.NeoForge
+	case modrinthIndex.Dependencies.Forge != "":
+		loaderName = "forge"
+		loaderVersion = modrinthIndex.Dependencies.Forge
+	case modrinthIndex.Dependencies.FabricLoader != "":
+		loaderName = "fabric"
+		loaderVersion = modrinthIndex.Dependencies.FabricLoader
+	case modrinthIndex.Dependencies.Fabric != "":
+		loaderName = "fabric"
+		loaderVersion = modrinthIndex.Dependencies.Fabric
+	}
+
 	// 创建 inst.json 文件
 	instConfig := core.InstConfig{
-		Version:        modrinthIndex.Dependencies.Minecraft,
+		Version:        minecraftVersion,
 		Download:       "bmclapi",
 		MaxConnections: 32,
 		Argsment:       "-Xmx{maxmen}M -Xms{maxmen}M -XX:+AlwaysPreTouch -XX:+DisableExplicitGC -XX:+ParallelRefProcEnabled -XX:+PerfDisableSharedMem -XX:+UnlockExperimentalVMOptions -XX:+UseG1GC -XX:G1HeapRegionSize=8M -XX:G1HeapWastePercent=5 -XX:G1MaxNewSizePercent=40 -XX:G1MixedGCCountTarget=4 -XX:G1MixedGCLiveThresholdPercent=90 -XX:G1NewSizePercent=30 -XX:G1RSetUpdatingPauseTimePercent=5 -XX:G1ReservePercent=20 -XX:InitiatingHeapOccupancyPercent=15 -XX:MaxGCPauseMillis=200 -XX:MaxTenuringThreshold=1 -XX:SurvivorRatio=32 -Dusing.aikars.flags=https://mcflags.emc.gs -Daikars.new.flags=true",
 	}
 
-	if modrinthIndex.Dependencies.NeoForge != "" {
-		instConfig.Loader = "neoforge"
-		instConfig.LoaderVersion = modrinthIndex.Dependencies.NeoForge
-	} else if modrinthIndex.Dependencies.Forge != "" {
-		instConfig.Loader = "forge"
-		instConfig.LoaderVersion = modrinthIndex.Dependencies.Forge
+	if loaderName != "" {
+		instConfig.Loader = loaderName
+		instConfig.LoaderVersion = loaderVersion
 	} else {
-		instConfig.Loader = "fabric"
-		instConfig.LoaderVersion = modrinthIndex.Dependencies.Fabric
+		core.Log("未找到可识别的加载器依赖，inst.json 将只写入 minecraft 版本")
 	}
 
 	// 写入 inst.json 文件

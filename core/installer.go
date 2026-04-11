@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -23,25 +24,57 @@ func installerJava(simpfun bool, mise bool) string {
 
 func runtimeJava(mc string) int {
 	mc = strings.Split(mc, "-")[0]
+	lowerMC := strings.ToLower(mc)
 
-	if strings.Contains(mc, "w") {
+	if strings.Contains(lowerMC, "snapshot") {
+		return 25
+	}
+
+	if match := regexp.MustCompile(`^(\d{2})w(\d{2})([a-z]?)$`).FindStringSubmatch(lowerMC); len(match) == 4 {
+		week, _ := strconv.Atoi(match[1])
+		if week >= 26 {
+			return 25
+		}
 		return 21
 	}
 
-	if strings.HasPrefix(mc, "1.") {
-		parts := strings.Split(mc, ".")
-		if len(parts) >= 2 {
-			minor, _ := strconv.Atoi(parts[1])
-			switch {
-			case minor <= 16:
-				return 8
-			case minor <= 17:
-				return 16
-			case minor <= 20:
+	if strings.Contains(lowerMC, "w") {
+		return 21
+	}
+
+	parts := strings.Split(mc, ".")
+	if len(parts) >= 2 && parts[0] == "1" {
+		minor, _ := strconv.Atoi(parts[1])
+		patch := 0
+		if len(parts) >= 3 {
+			patch, _ = strconv.Atoi(parts[2])
+		}
+
+		switch minor {
+		case 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16:
+			return 8
+		case 17:
+			return 16
+		case 18, 19:
+			return 17
+		case 20:
+			if patch <= 4 {
 				return 17
-			default:
+			}
+			return 21
+		case 21:
+			if patch <= 11 {
 				return 21
 			}
+			return 25
+		default:
+			return 25
+		}
+	}
+
+	if major, err := strconv.Atoi(parts[0]); err == nil {
+		if major >= 26 {
+			return 25
 		}
 	}
 
@@ -174,8 +207,10 @@ func RunScript(
 			javaPath = "/usr/bin/jdk/jdk-16/bin/java"
 		case 17:
 			javaPath = "/usr/bin/jdk/jdk-17.0.6/bin/java"
-		default:
+		case 21:
 			javaPath = "/usr/bin/jdk/jdk-21.0.2/bin/java"
+		default:
+			javaPath = "/usr/bin/jdk/jdk-25.0.2/bin/java"
 		}
 	} else {
 		javaPath = "java"
