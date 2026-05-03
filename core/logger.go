@@ -22,6 +22,7 @@ var (
 	LogFile        *os.File
 	DownloadErrors []DownloadError
 	ErrorMutex     sync.Mutex
+	logMutex       sync.Mutex
 )
 
 func SetupLogger() error {
@@ -69,8 +70,7 @@ func logToBoth(msg string, skip int) {
 		timestamp := time.Now().Format("2006-01-02 15:04:05")
 		cleanMsg := strings.TrimRight(msg, "\n")
 		if cleanMsg != "" {
-			logLine := fmt.Sprintf("[%s][%s] %s\n", timestamp, source, cleanMsg)
-			LogFile.WriteString(logLine)
+			WriteLogRaw(fmt.Sprintf("[%s][%s] %s\n", timestamp, source, cleanMsg))
 		}
 	}
 }
@@ -125,44 +125,52 @@ func (w *streamLogWriter) flushCompletedLinesLocked() {
 }
 
 func writeLogLine(source, msg string) {
-	if LogFile == nil || msg == "" {
+	if msg == "" {
 		return
 	}
 	timestamp := time.Now().Format("2006-01-02 15:04:05")
-	LogFile.WriteString(fmt.Sprintf("[%s][%s] %s\n", timestamp, source, msg))
+	WriteLogRaw(fmt.Sprintf("[%s][%s] %s\n", timestamp, source, msg))
+}
+
+func WriteLogRaw(msg string) {
+	if LogFile == nil || msg == "" {
+		return
+	}
+	logMutex.Lock()
+	defer logMutex.Unlock()
+	_, _ = LogFile.WriteString(msg)
 }
 
 func RecordError(url string, err error, response string) {
 	ErrorMutex.Lock()
-	defer ErrorMutex.Unlock()
 	DownloadErrors = append(DownloadErrors, DownloadError{
 		URL:      url,
 		Err:      err,
 		Response: response,
 	})
+	ErrorMutex.Unlock()
 
-	if LogFile != nil {
-		timestamp := time.Now().Format("2006-01-02 15:04:05")
+	timestamp := time.Now().Format("2006-01-02 15:04:05")
 
-		_, file, _, ok := runtime.Caller(1)
-		source := "unknown"
-		if ok {
-			file = filepath.ToSlash(file)
-			if idx := strings.Index(file, "AutoInstall/"); idx != -1 {
-				source = file[idx+len("AutoInstall/"):]
-				source = strings.TrimSuffix(source, ".go")
-			} else {
-				source = filepath.Base(file)
-			}
+	_, file, _, ok := runtime.Caller(1)
+	source := "unknown"
+	if ok {
+		file = filepath.ToSlash(file)
+		if idx := strings.Index(file, "AutoInstall/"); idx != -1 {
+			source = file[idx+len("AutoInstall/"):]
+			source = strings.TrimSuffix(source, ".go")
+		} else {
+			source = filepath.Base(file)
 		}
-
-		msg := fmt.Sprintf("[%s][%s] Error downloading %s: %v | Response: %s\n", timestamp, source, url, err, response)
-		LogFile.WriteString(msg)
 	}
+
+	msg := fmt.Sprintf("[%s][%s] Error downloading %s: %v | Response: %s\n", timestamp, source, url, err, response)
+	WriteLogRaw(msg)
 }
 
 func CloseLogger() {
 	if LogFile != nil {
 		LogFile.Close()
+		LogFile = nil
 	}
 }

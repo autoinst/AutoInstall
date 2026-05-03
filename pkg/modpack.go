@@ -19,21 +19,39 @@ import (
 
 var DownloadWg sync.WaitGroup
 
-func WaitDownloads() {
-	DownloadWg.Wait()
+var downloadErrs struct {
+	sync.Mutex
+	errs []error
 }
 
-func Search(MaxConnections int, Argsment string) {
+func WaitDownloads() error {
+	DownloadWg.Wait()
+	downloadErrs.Lock()
+	defer downloadErrs.Unlock()
+	return errors.Join(downloadErrs.errs...)
+}
+
+func recordAsyncDownloadError(err error) {
+	if err == nil {
+		return
+	}
+	downloadErrs.Lock()
+	defer downloadErrs.Unlock()
+	downloadErrs.errs = append(downloadErrs.errs, err)
+}
+
+func Search(MaxConnections int, Argsment string, MaxRetries int, baseConfig core.InstConfig) (bool, error) {
 	core.Log("正在扫描可用的整合包...")
 	pack, packType, err := detectPackFile()
 	if err != nil {
 		core.Log(err.Error())
-		return
+		return false, nil
 	}
 
-	if err := installByType(packType, pack, MaxConnections, Argsment); err != nil {
-		core.Log("安装失败:", err)
+	if err := installByType(packType, pack, MaxConnections, Argsment, MaxRetries, baseConfig); err != nil {
+		return true, fmt.Errorf("安装失败: %w", err)
 	}
+	return true, nil
 }
 
 func detectPackFile() (path string, packType string, err error) {
@@ -94,27 +112,39 @@ func packTypeFromExt(path string) string {
 	}
 }
 
-func installByType(packType, path string, MaxConnections int, Argsment string) error {
+func installByType(packType, path string, MaxConnections int, Argsment string, MaxRetries int, baseConfig core.InstConfig) error {
 	bundleName := bundleNameFromPath(path)
 	switch packType {
 	case "spc-plain":
-		SPCInstall(path, MaxConnections, Argsment, bundleName)
-		return nil
+		return SPCInstall(path, MaxConnections, Argsment, bundleName, MaxRetries, baseConfig)
 	case "modrinth-plain":
-		Modrinth(path, MaxConnections, Argsment, bundleName)
-		return nil
+		return Modrinth(path, MaxConnections, Argsment, bundleName, MaxRetries, baseConfig)
 	case "curseforge-plain":
-		CurseForge(path, MaxConnections, Argsment, bundleName)
-		return nil
+		return CurseForge(path, MaxConnections, Argsment, bundleName, MaxRetries, baseConfig)
 	case "modrinth":
-		return installModrinthArchive(path, MaxConnections, Argsment, bundleName)
+		return installModrinthArchive(path, MaxConnections, Argsment, bundleName, MaxRetries, baseConfig)
 	case "curseforge-zip":
-		return installCurseForgeArchive(path, MaxConnections, Argsment, bundleName)
+		return installCurseForgeArchive(path, MaxConnections, Argsment, bundleName, MaxRetries, baseConfig)
 	case "zip":
-		return installZipArchive(path, MaxConnections, Argsment, bundleName)
+		return installZipArchive(path, MaxConnections, Argsment, bundleName, MaxRetries, baseConfig)
 	default:
 		return fmt.Errorf("无法识别的整合包类型: %s", packType)
 	}
+}
+
+func modpackBaseConfig(baseConfig core.InstConfig, maxRetries int) core.InstConfig {
+	core.ApplyConfigDefaults(&baseConfig)
+	if baseConfig.Download == "" {
+		baseConfig.Download = "bmclapi"
+	}
+	if baseConfig.MaxConnections <= 0 {
+		baseConfig.MaxConnections = 32
+	}
+	baseConfig.MaxRetries = core.NormalizeRetries(maxRetries)
+	if strings.TrimSpace(baseConfig.Argsment) == "" {
+		baseConfig.Argsment = "-Xmx{maxmen}M -Xms{maxmen}M -XX:+AlwaysPreTouch -XX:+DisableExplicitGC -XX:+ParallelRefProcEnabled -XX:+PerfDisableSharedMem -XX:+UnlockExperimentalVMOptions -XX:+UseG1GC -XX:G1HeapRegionSize=8M -XX:G1HeapWastePercent=5 -XX:G1MaxNewSizePercent=40 -XX:G1MixedGCCountTarget=4 -XX:G1MixedGCLiveThresholdPercent=90 -XX:G1NewSizePercent=30 -XX:G1RSetUpdatingPauseTimePercent=5 -XX:G1ReservePercent=20 -XX:InitiatingHeapOccupancyPercent=15 -XX:MaxGCPauseMillis=200 -XX:MaxTenuringThreshold=1 -XX:SurvivorRatio=32 -Dusing.aikars.flags=https://mcflags.emc.gs -Daikars.new.flags=true"
+	}
+	return baseConfig
 }
 
 func bundleNameFromPath(path string) string {
@@ -140,17 +170,17 @@ func bundleNameFromPath(path string) string {
 }
 
 // installZipArchive 尝试识别 zip 是 CurseForge 还是 SPC 格式
-func installZipArchive(file string, MaxConnections int, Argsment string, bundleName string) error {
+func installZipArchive(file string, MaxConnections int, Argsment string, bundleName string, MaxRetries int, baseConfig core.InstConfig) error {
 	if zipContains(file, "modrinth.index.json") {
-		return installModrinthArchive(file, MaxConnections, Argsment, bundleName)
+		return installModrinthArchive(file, MaxConnections, Argsment, bundleName, MaxRetries, baseConfig)
 	}
 	if zipContains(file, "manifest.json") {
 		if manifestIsSPCFromZip(file) {
-			return installSPCArchive(file, MaxConnections, Argsment, bundleName)
+			return installSPCArchive(file, MaxConnections, Argsment, bundleName, MaxRetries, baseConfig)
 		}
-		return installCurseForgeArchive(file, MaxConnections, Argsment, bundleName)
+		return installCurseForgeArchive(file, MaxConnections, Argsment, bundleName, MaxRetries, baseConfig)
 	}
-	return installSPCArchive(file, MaxConnections, Argsment, bundleName)
+	return installSPCArchive(file, MaxConnections, Argsment, bundleName, MaxRetries, baseConfig)
 }
 
 func manifestIsSPCFromFile(path string) bool {
@@ -200,41 +230,50 @@ func manifestIsSPCFromZip(zipPath string) bool {
 	return false
 }
 
-func installCurseForgeArchive(file string, MaxConnections int, Argsment string, bundleName string) error {
+func installCurseForgeArchive(file string, MaxConnections int, Argsment string, bundleName string, MaxRetries int, baseConfig core.InstConfig) error {
+	manifestEntry, err := findZipEntry(file, "manifest.json")
+	if err != nil {
+		return err
+	}
 	if err := extractZip(file, nil); err != nil {
 		return fmt.Errorf("解压失败: %w", err)
 	}
-	manifestPath, ok := findFileRecursive(".", "manifest.json")
-	if !ok {
-		return errors.New("解压后未找到 manifest.json")
+	manifestPath, err := safeJoin(".", manifestEntry)
+	if err != nil {
+		return err
 	}
-	CurseForge(manifestPath, MaxConnections, Argsment, bundleName)
-	return nil
+	return CurseForge(manifestPath, MaxConnections, Argsment, bundleName, MaxRetries, baseConfig)
 }
 
-func installSPCArchive(file string, MaxConnections int, Argsment string, bundleName string) error {
+func installSPCArchive(file string, MaxConnections int, Argsment string, bundleName string, MaxRetries int, baseConfig core.InstConfig) error {
+	variablesEntry, err := findZipEntry(file, "variables.txt")
+	if err != nil {
+		return err
+	}
 	skipScripts := map[string]struct{}{"start.sh": {}, "run.sh": {}}
 	if err := extractZip(file, skipScripts); err != nil {
 		return fmt.Errorf("解压失败: %w", err)
 	}
-	variablesPath, ok := findFileRecursive(".", "variables.txt")
-	if !ok {
-		return errors.New("解压后未找到 variables.txt")
+	variablesPath, err := safeJoin(".", variablesEntry)
+	if err != nil {
+		return err
 	}
-	SPCInstall(variablesPath, MaxConnections, Argsment, bundleName)
-	return nil
+	return SPCInstall(variablesPath, MaxConnections, Argsment, bundleName, MaxRetries, baseConfig)
 }
 
-func installModrinthArchive(file string, MaxConnections int, Argsment string, bundleName string) error {
+func installModrinthArchive(file string, MaxConnections int, Argsment string, bundleName string, MaxRetries int, baseConfig core.InstConfig) error {
+	indexEntry, err := findZipEntry(file, "modrinth.index.json")
+	if err != nil {
+		return err
+	}
 	if err := extractZip(file, nil); err != nil {
 		return fmt.Errorf("解压失败: %w", err)
 	}
-	indexPath, ok := findFileRecursive(".", "modrinth.index.json")
-	if !ok {
-		return errors.New("解压后未找到 modrinth.index.json")
+	indexPath, err := safeJoin(".", indexEntry)
+	if err != nil {
+		return err
 	}
-	Modrinth(indexPath, MaxConnections, Argsment, bundleName)
-	return nil
+	return Modrinth(indexPath, MaxConnections, Argsment, bundleName, MaxRetries, baseConfig)
 }
 
 func zipContains(zipPath, target string) bool {
@@ -271,12 +310,7 @@ func extractZip(archivePath string, skipNames map[string]struct{}) error {
 	}
 	defer r.Close()
 	for _, f := range r.File {
-		name := f.Name
-		if f.NonUTF8 {
-			if fixed, ok := tryFixZipName(name); ok {
-				name = fixed
-			}
-		}
+		name := zipEntryName(f)
 		if skipNames != nil {
 			if _, ok := skipNames[name]; ok {
 				continue
@@ -285,7 +319,13 @@ func extractZip(archivePath string, skipNames map[string]struct{}) error {
 				continue
 			}
 		}
-		fp := filepath.Join("./", name)
+		if f.FileInfo().Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("不支持解压符号链接: %s", name)
+		}
+		fp, err := safeJoin(".", name)
+		if err != nil {
+			return err
+		}
 		if f.FileInfo().IsDir() {
 			if err := os.MkdirAll(fp, os.ModePerm); err != nil {
 				return err
@@ -313,6 +353,73 @@ func extractZip(archivePath string, skipNames map[string]struct{}) error {
 		_ = src.Close()
 	}
 	return nil
+}
+
+func zipEntryName(f *zip.File) string {
+	name := f.Name
+	if f.NonUTF8 {
+		if fixed, ok := tryFixZipName(name); ok {
+			name = fixed
+		}
+	}
+	return name
+}
+
+func safeJoin(baseDir, name string) (string, error) {
+	name = strings.TrimSpace(strings.ReplaceAll(name, "\\", "/"))
+	if name == "" {
+		return "", fmt.Errorf("路径为空")
+	}
+	if filepath.IsAbs(name) || filepath.VolumeName(name) != "" || strings.HasPrefix(name, "//") {
+		return "", fmt.Errorf("非法路径: %s", name)
+	}
+	cleanName := filepath.Clean(filepath.FromSlash(name))
+	if cleanName == "." || strings.HasPrefix(cleanName, ".."+string(os.PathSeparator)) || cleanName == ".." {
+		return "", fmt.Errorf("路径逃逸: %s", name)
+	}
+	baseAbs, err := filepath.Abs(baseDir)
+	if err != nil {
+		return "", err
+	}
+	joined := filepath.Join(baseAbs, cleanName)
+	joinedAbs, err := filepath.Abs(joined)
+	if err != nil {
+		return "", err
+	}
+	rel, err := filepath.Rel(baseAbs, joinedAbs)
+	if err != nil {
+		return "", err
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) || filepath.IsAbs(rel) {
+		return "", fmt.Errorf("路径逃逸: %s", name)
+	}
+	return joinedAbs, nil
+}
+
+func findZipEntry(zipPath, target string) (string, error) {
+	r, err := zip.OpenReader(zipPath)
+	if err != nil {
+		return "", err
+	}
+	defer r.Close()
+
+	var matches []string
+	for _, f := range r.File {
+		name := zipEntryName(f)
+		if filepath.Base(name) == target {
+			if _, err := safeJoin(".", name); err != nil {
+				return "", err
+			}
+			matches = append(matches, name)
+		}
+	}
+	if len(matches) == 0 {
+		return "", fmt.Errorf("压缩包内未找到 %s", target)
+	}
+	if len(matches) > 1 {
+		return "", fmt.Errorf("压缩包内存在多个 %s: %s", target, strings.Join(matches, ", "))
+	}
+	return matches[0], nil
 }
 
 func tryFixZipName(name string) (string, bool) {

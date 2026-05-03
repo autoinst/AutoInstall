@@ -1,9 +1,8 @@
 package pkg
 
 import (
-	"crypto/sha1"
+	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,12 +11,17 @@ import (
 	"github.com/autoinst/AutoInstall/core"
 )
 
-func DownloadLibraries(versionInfo core.VersionInfo, librariesDir string, maxConnections int, downloadapi string) error {
+func DownloadLibraries(versionInfo core.VersionInfo, librariesDir string, maxConnections int, downloadapi string, maxRetries int) error {
 	if err := os.MkdirAll(librariesDir, os.ModePerm); err != nil {
 		return fmt.Errorf("无法创建目录: %v", err)
 	}
 
+	if maxConnections <= 0 {
+		maxConnections = 4
+	}
+
 	sem := make(chan struct{}, maxConnections)
+	errChan := make(chan error, len(versionInfo.Libraries))
 	var wg sync.WaitGroup
 
 	for _, lib := range versionInfo.Libraries {
@@ -26,72 +30,85 @@ func DownloadLibraries(versionInfo core.VersionInfo, librariesDir string, maxCon
 			continue
 		}
 
-		originalURL := lib.Downloads.Artifact.URL
-		url := originalURL
-		if downloadapi == "bmclapi" {
-			url = strings.Replace(url, "https://maven.minecraftforge.net/", "https://bmclapi2.bangbang93.com/maven/", 1)
-			url = strings.Replace(url, "https://maven.fabricmc.net/", "https://bmclapi2.bangbang93.com/maven/", 1)
-			url = strings.Replace(url, "https://maven.neoforged.net/releases/", "https://bmclapi2.bangbang93.com/maven/", 1)
-			url = strings.Replace(url, "https://libraries.minecraft.net/", "https://bmclapi2.bangbang93.com/maven/", 1)
-		}
-
-		if url == "" {
+		officialURL := lib.Downloads.Artifact.URL
+		currentURL, fallbackURL := downloadURLPair(officialURL, downloadapi)
+		if currentURL == "" {
 			core.Logf("警告: 处理后 URL 仍为空，跳过库 %s\n", lib.Name)
 			continue
 		}
 		filePath := filepath.Join(librariesDir, lib.Downloads.Artifact.Path)
 
 		wg.Add(1)
-		go func(lib core.Library, url, originalURL, filePath string) {
+		go func(lib core.Library, currentURL, fallbackURL, filePath string) {
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
-			// 校验 SHA1
 			if _, err := os.Stat(filePath); err == nil {
-				fileSHA1, err := computeSHA1(filePath)
-				if err == nil && fileSHA1 == lib.Downloads.Artifact.SHA1 {
+				if err := core.VerifyFileHash(filePath, "sha1", lib.Downloads.Artifact.SHA1); err == nil {
 					core.Logf("已存在且校验通过: %s\n", filePath)
 					return
-				} else {
-					core.Logf("文件 %s 校验失败 (或无法校验)，重新下载...\n", filePath)
-					os.Remove(filePath)
+				}
+				core.Logf("文件 %s 校验失败 (或无法校验)，重新下载...\n", filePath)
+				if err := os.Remove(filePath); err != nil && !os.IsNotExist(err) {
+					errChan <- fmt.Errorf("删除校验失败文件 %s 失败: %w", filePath, err)
+					return
 				}
 			}
 
 			if err := os.MkdirAll(filepath.Dir(filePath), os.ModePerm); err != nil {
-				core.Logf("无法创建目录: %v\n", err)
+				errChan <- fmt.Errorf("无法创建目录: %w", err)
 				return
 			}
-			err := core.DownloadFile(url, filePath)
-			if err != nil {
-				core.Logf("下载失败 %s: %v\n", lib.Name, err)
-				core.Log("尝试使用原始链接下载:", originalURL)
-				if err := core.DownloadFile(originalURL, filePath); err != nil {
-					core.Logf("原始链接下载也失败 %s: %v\n", lib.Name, err)
-				} else {
-					core.Log("使用原始链接下载完成:", filePath)
-				}
-			} else {
-				core.Log("下载完成:", filePath)
+			if err := core.DownloadFileWithFallback(currentURL, fallbackURL, filePath, maxRetries); err != nil {
+				errChan <- fmt.Errorf("下载库 %s 失败: %w", lib.Name, err)
+				return
 			}
-		}(lib, url, originalURL, filePath)
+			if err := core.VerifyFileHash(filePath, "sha1", lib.Downloads.Artifact.SHA1); err != nil {
+				_ = os.Remove(filePath)
+				errChan <- fmt.Errorf("下载库 %s 后校验失败: %w", lib.Name, err)
+				return
+			}
+			core.Log("下载完成:", filePath)
+		}(lib, currentURL, fallbackURL, filePath)
 	}
 	wg.Wait()
-	return nil
+	close(errChan)
+
+	var errs []error
+	for err := range errChan {
+		if err != nil {
+			core.Log("下载出错:", err)
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
 }
 
-func computeSHA1(filePath string) (string, error) {
-	file, err := os.Open(filePath)
-	if err != nil {
-		return "", err
+func downloadURLPair(officialURL string, downloadapi string) (string, string) {
+	mirrorURL := mirrorDownloadURL(officialURL)
+	if downloadapi == "bmclapi" {
+		return mirrorURL, officialURL
 	}
-	defer file.Close()
+	return officialURL, mirrorURL
+}
 
-	hasher := sha1.New()
-	if _, err := io.Copy(hasher, file); err != nil {
-		return "", err
+func mirrorDownloadURL(officialURL string) string {
+	url := officialURL
+	replacements := []struct {
+		old string
+		new string
+	}{
+		{"https://maven.minecraftforge.net/", "https://bmclapi2.bangbang93.com/maven/"},
+		{"https://maven.fabricmc.net/", "https://bmclapi2.bangbang93.com/maven/"},
+		{"https://maven.neoforged.net/releases/", "https://bmclapi2.bangbang93.com/maven/"},
+		{"https://libraries.minecraft.net/", "https://bmclapi2.bangbang93.com/maven/"},
+		{"https://repo1.maven.org/maven2/", "https://bmclapi2.bangbang93.com/maven/"},
 	}
-
-	return fmt.Sprintf("%x", hasher.Sum(nil)), nil
+	for _, replacement := range replacements {
+		if strings.HasPrefix(url, replacement.old) {
+			return strings.Replace(url, replacement.old, replacement.new, 1)
+		}
+	}
+	return officialURL
 }

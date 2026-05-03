@@ -145,6 +145,62 @@ func RunInstaller(
 	return err
 }
 
+func RunInstallerWithFallback(
+	installerPath string,
+	loader string,
+	version string,
+	loaderVersion string,
+	downloadSource string,
+	simpfun bool,
+	mise bool,
+	retries int,
+) error {
+	retries = NormalizeRetries(retries)
+	currentSource := downloadSource
+	if currentSource == "" {
+		currentSource = "official"
+	}
+
+	fallbackSource := "bmclapi"
+	if currentSource == "bmclapi" {
+		fallbackSource = "official"
+	}
+
+	currentErr := runInstallerRetry(installerPath, loader, version, loaderVersion, currentSource, simpfun, mise, retries)
+	if currentErr == nil {
+		return nil
+	}
+
+	Log("当前源运行安装器失败，切换备用源")
+	fallbackErr := runInstallerRetry(installerPath, loader, version, loaderVersion, fallbackSource, simpfun, mise, retries)
+	if fallbackErr == nil {
+		return nil
+	}
+	return fmt.Errorf("当前源运行安装器失败: %w; 备用源运行安装器失败: %w", currentErr, fallbackErr)
+}
+
+func runInstallerRetry(
+	installerPath string,
+	loader string,
+	version string,
+	loaderVersion string,
+	downloadSource string,
+	simpfun bool,
+	mise bool,
+	retries int,
+) error {
+	var lastErr error
+	for i := 0; i < retries; i++ {
+		if err := RunInstaller(installerPath, loader, version, loaderVersion, downloadSource, simpfun, mise); err != nil {
+			lastErr = err
+			Logf("运行安装器失败 %d/%d: %v\n", i+1, retries, err)
+			continue
+		}
+		return nil
+	}
+	return fmt.Errorf("多次运行安装器失败 (共 %d 次): %w", retries, lastErr)
+}
+
 func FindJava() (string, bool, bool) {
 	simpfun := false
 	mise := false
@@ -185,9 +241,7 @@ func RunScript(
 	simpfun bool,
 	mise bool,
 	argsment string,
-) {
-
-	_ = os.Remove("run.sh")
+) error {
 
 	mem, err := strconv.Atoi(os.Getenv("SERVER_MEMORY"))
 	if err != nil || mem <= 1500 {
@@ -250,6 +304,17 @@ func RunScript(
 		)
 	}
 
+	if script == "" {
+		return fmt.Errorf("无法为加载器 %s 生成启动脚本", Loader)
+	}
 	script = "#!/bin/bash\n" + script + "\n"
-	_ = os.WriteFile("run.sh", []byte(script), 0777)
+	tmp := "run.sh.tmp"
+	if err := os.WriteFile(tmp, []byte(script), 0777); err != nil {
+		return err
+	}
+	if err := os.Rename(tmp, "run.sh"); err != nil {
+		_ = os.Remove(tmp)
+		return err
+	}
+	return nil
 }

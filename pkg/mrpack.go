@@ -2,6 +2,7 @@ package pkg
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -17,6 +18,7 @@ type ModrinthIndex struct {
 		Path      string            `json:"path"`
 		Env       map[string]string `json:"env"`
 		Downloads []string          `json:"downloads"`
+		Hashes    map[string]string `json:"hashes"`
 	} `json:"files"`
 	Dependencies ModrinthDependencies `json:"dependencies"`
 }
@@ -43,11 +45,11 @@ func (d *ModrinthDependencies) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func Modrinth(file string, MaxCon int, Args string, bundleName string) {
+func Modrinth(file string, MaxCon int, Args string, bundleName string, MaxRetries int, baseConfig core.InstConfig) error {
+	MaxRetries = core.NormalizeRetries(MaxRetries)
 	overridesPath := filepath.Join("./", "overrides")
 	if err := moveOverrides(overridesPath); err != nil {
-		core.Log("移动 overrides 文件失败:", err)
-		return
+		return fmt.Errorf("移动 overrides 文件失败: %w", err)
 	}
 
 	idx := "modrinth.index.json"
@@ -57,21 +59,18 @@ func Modrinth(file string, MaxCon int, Args string, bundleName string) {
 	indexPath := filepath.Join("./", idx)
 	indexFile, err := os.Open(indexPath)
 	if err != nil {
-		core.Log("未找到 modrinth.index.json")
-		return
+		return fmt.Errorf("未找到 modrinth.index.json: %w", err)
 	}
 	defer indexFile.Close()
 
 	byteValue, err := io.ReadAll(indexFile)
 	if err != nil {
-		core.Log("读取 modrinth.index.json 失败:", err)
-		return
+		return fmt.Errorf("读取 modrinth.index.json 失败: %w", err)
 	}
 
 	var modrinthIndex ModrinthIndex
 	if err := json.Unmarshal(byteValue, &modrinthIndex); err != nil {
-		core.Log("解析 modrinth.index.json 失败:", err)
-		return
+		return fmt.Errorf("解析 modrinth.index.json 失败: %w", err)
 	}
 	minecraftVersion := modrinthIndex.Dependencies.Minecraft
 	loaderVersion := modrinthIndex.Dependencies.NeoForge
@@ -91,13 +90,8 @@ func Modrinth(file string, MaxCon int, Args string, bundleName string) {
 		loaderVersion = modrinthIndex.Dependencies.Fabric
 	}
 
-	// 创建 inst.json 文件
-	instConfig := core.InstConfig{
-		Version:        minecraftVersion,
-		Download:       "bmclapi",
-		MaxConnections: 32,
-		Argsment:       "-Xmx{maxmen}M -Xms{maxmen}M -XX:+AlwaysPreTouch -XX:+DisableExplicitGC -XX:+ParallelRefProcEnabled -XX:+PerfDisableSharedMem -XX:+UnlockExperimentalVMOptions -XX:+UseG1GC -XX:G1HeapRegionSize=8M -XX:G1HeapWastePercent=5 -XX:G1MaxNewSizePercent=40 -XX:G1MixedGCCountTarget=4 -XX:G1MixedGCLiveThresholdPercent=90 -XX:G1NewSizePercent=30 -XX:G1RSetUpdatingPauseTimePercent=5 -XX:G1ReservePercent=20 -XX:InitiatingHeapOccupancyPercent=15 -XX:MaxGCPauseMillis=200 -XX:MaxTenuringThreshold=1 -XX:SurvivorRatio=32 -Dusing.aikars.flags=https://mcflags.emc.gs -Daikars.new.flags=true",
-	}
+	instConfig := modpackBaseConfig(baseConfig, MaxRetries)
+	instConfig.Version = minecraftVersion
 
 	if loaderName != "" {
 		instConfig.Loader = loaderName
@@ -106,15 +100,12 @@ func Modrinth(file string, MaxCon int, Args string, bundleName string) {
 		core.Log("未找到可识别的加载器依赖，inst.json 将只写入 minecraft 版本")
 	}
 
-	// 写入 inst.json 文件
 	jsonData, err := json.MarshalIndent(instConfig, "", "  ")
 	if err != nil {
-		core.Log("生成 inst.json 失败:", err)
-		return
+		return fmt.Errorf("生成 inst.json 失败: %w", err)
 	}
 	if err := os.WriteFile("inst.json", jsonData, 0777); err != nil {
-		core.Log("写入 inst.json 失败:", err)
-		return
+		return fmt.Errorf("写入 inst.json 失败: %w", err)
 	}
 
 	var wg sync.WaitGroup
@@ -127,23 +118,32 @@ func Modrinth(file string, MaxCon int, Args string, bundleName string) {
 
 	for _, file := range modrinthIndex.Files {
 		wg.Add(1)
-		semaphore <- struct{}{} // 获取信号量
+		semaphore <- struct{}{}
 
 		go func(file struct {
 			Path      string            `json:"path"`
 			Env       map[string]string `json:"env"`
 			Downloads []string          `json:"downloads"`
+			Hashes    map[string]string `json:"hashes"`
 		}) {
 			defer func() {
-				<-semaphore // 释放信号量
+				<-semaphore
 				wg.Done()
 			}()
 
-			if val, ok := file.Env["server"]; ok && val == "unsupported" {
+			if val, ok := file.Env["server"]; ok && strings.EqualFold(strings.TrimSpace(val), "unsupported") {
+				return
+			}
+			if len(file.Downloads) == 0 {
+				errChan <- fmt.Errorf("文件 %s 没有下载链接", file.Path)
 				return
 			}
 
-			filePath := filepath.Join(file.Path)
+			filePath, err := safeJoin(".", file.Path)
+			if err != nil {
+				errChan <- err
+				return
+			}
 			if err := os.MkdirAll(filepath.Dir(filePath), os.ModePerm); err != nil {
 				errChan <- err
 				return
@@ -152,7 +152,7 @@ func Modrinth(file string, MaxCon int, Args string, bundleName string) {
 			var downloadErr error
 			for _, downloadURL := range file.Downloads {
 				core.Log("尝试下载:", downloadURL)
-				downloadErr = core.DownloadFile(downloadURL, filePath)
+				downloadErr = core.DownloadFileRetry(downloadURL, filePath, MaxRetries)
 				if downloadErr == nil {
 					break
 				}
@@ -162,27 +162,58 @@ func Modrinth(file string, MaxCon int, Args string, bundleName string) {
 				errChan <- fmt.Errorf("所有下载链接均失败: %v", downloadErr)
 				return
 			}
+			if err := verifyModrinthFile(filePath, file.Hashes); err != nil {
+				_ = os.Remove(filePath)
+				errChan <- fmt.Errorf("文件 %s 校验失败: %w", file.Path, err)
+				return
+			}
 		}(file)
 	}
 
 	wg.Wait()
 	close(errChan)
 
+	var errs []error
 	for err := range errChan {
 		if err != nil {
 			core.Log("下载出错:", err)
+			errs = append(errs, err)
 		}
+	}
+	if err := errors.Join(errs...); err != nil {
+		return err
 	}
 
 	runInstalledModFilter(bundleName)
-
 	_ = os.Remove(indexFile.Name())
+	return nil
+}
+
+func verifyModrinthFile(filePath string, hashes map[string]string) error {
+	if hashes == nil {
+		return nil
+	}
+	if sha512 := hashes["sha512"]; sha512 != "" {
+		return core.VerifyFileHash(filePath, "sha512", sha512)
+	}
+	if sha1 := hashes["sha1"]; sha1 != "" {
+		return core.VerifyFileHash(filePath, "sha1", sha1)
+	}
+	return nil
 }
 
 func moveOverrides(overridesPath string) error {
 	if stat, err := os.Stat(overridesPath); err != nil || !stat.IsDir() {
 		return nil
 	}
+
+	type moveItem struct {
+		src string
+		dst string
+	}
+	var items []moveItem
+	var conflicts []string
+
 	if err := filepath.Walk(overridesPath, func(path string, info os.FileInfo, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
@@ -194,16 +225,54 @@ func moveOverrides(overridesPath string) error {
 		if err != nil {
 			return err
 		}
-		destPath := filepath.Join("./", relPath)
-		if err := os.MkdirAll(filepath.Dir(destPath), os.ModePerm); err != nil {
+		destPath, err := safeJoin(".", relPath)
+		if err != nil {
 			return err
 		}
-		if err := os.Rename(path, destPath); err != nil {
-			return err
+		if _, err := os.Stat(destPath); err == nil {
+			same, err := sameFileContent(path, destPath)
+			if err != nil {
+				return err
+			}
+			if !same {
+				conflicts = append(conflicts, relPath)
+			}
 		}
+		items = append(items, moveItem{src: path, dst: destPath})
 		return nil
 	}); err != nil {
 		return err
 	}
+	if len(conflicts) > 0 {
+		return fmt.Errorf("overrides 文件冲突，未覆盖现有文件: %s", strings.Join(conflicts, ", "))
+	}
+
+	for _, item := range items {
+		if err := os.MkdirAll(filepath.Dir(item.dst), os.ModePerm); err != nil {
+			return err
+		}
+		if same, _ := sameFileContent(item.src, item.dst); same {
+			_ = os.Remove(item.src)
+			continue
+		}
+		if err := os.Rename(item.src, item.dst); err != nil {
+			return err
+		}
+	}
 	return os.RemoveAll(overridesPath)
+}
+
+func sameFileContent(a, b string) (bool, error) {
+	left, err := os.ReadFile(a)
+	if err != nil {
+		return false, err
+	}
+	right, err := os.ReadFile(b)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return string(left) == string(right), nil
 }

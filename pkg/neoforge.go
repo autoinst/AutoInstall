@@ -1,21 +1,20 @@
 package pkg
 
 import (
-	"encoding/json"
 	"fmt"
-	"net/http"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/autoinst/AutoInstall/core"
 )
 
-func NeoForgeB(config core.InstConfig, simpfun bool, mise bool) {
+func NeoForgeB(config core.InstConfig, simpfun bool, mise bool) error {
+	core.ApplyConfigDefaults(&config)
 	if config.Version == "latest" {
-		latestVersion, err := FetchLatestNeoForgeVersion()
+		latestVersion, err := FetchLatestNeoForgeVersion(config.MaxRetries)
 		if err != nil {
-			core.Log("获取最新版本失败:", err)
-			return
+			return fmt.Errorf("获取最新版本失败: %w", err)
 		}
 		config.LoaderVersion = latestVersion
 
@@ -23,98 +22,69 @@ func NeoForgeB(config core.InstConfig, simpfun bool, mise bool) {
 		if len(parts) >= 3 {
 			config.Version = fmt.Sprintf("1.%s.%s", parts[0], parts[1])
 		} else {
-			core.Log("最新版本号格式不正确:", latestVersion)
-			return
+			return fmt.Errorf("最新版本号格式不正确: %s", latestVersion)
 		}
 	}
 
 	if config.LoaderVersion == "latest" {
-		latestMatchingVersion, err := FetchLatestMatchingNeoForgeVersion(config.Version)
+		latestMatchingVersion, err := FetchLatestMatchingNeoForgeVersion(config.Version, config.MaxRetries)
 		if err != nil {
-			core.Log("获取对应版本最新加载器版本失败:", err)
-			return
+			return fmt.Errorf("获取对应版本最新加载器版本失败: %w", err)
 		}
 		config.LoaderVersion = latestMatchingVersion
 	}
 
-	var installerURL string
-	if config.Download == "bmclapi" {
-		installerURL = fmt.Sprintf(
-			"https://bmclapi2.bangbang93.com/maven/net/neoforged/neoforge/%s/neoforge-%s-installer.jar",
-			config.LoaderVersion, config.LoaderVersion,
-		)
-	} else {
-		installerURL = fmt.Sprintf(
-			"https://maven.neoforged.net/releases/net/neoforged/neoforge/%s/neoforge-%s-installer.jar",
-			config.LoaderVersion, config.LoaderVersion,
-		)
-	}
-
+	officialInstallerURL := fmt.Sprintf(
+		"https://maven.neoforged.net/releases/net/neoforged/neoforge/%s/neoforge-%s-installer.jar",
+		config.LoaderVersion, config.LoaderVersion,
+	)
+	installerURL, fallbackInstallerURL := downloadURLPair(officialInstallerURL, config.Download)
 	installerPath := filepath.Join("./.autoinst/cache", fmt.Sprintf("neoforge-%s-installer.jar", config.LoaderVersion))
 	core.Log("当前为 neoforge 加载器，正在下载:", installerURL)
-	if err := core.DownloadFile(installerURL, installerPath); err != nil {
-		core.Log("下载 neoforge 失败:", err)
-		return
+	if err := core.DownloadFileWithFallback(installerURL, fallbackInstallerURL, installerPath, config.MaxRetries); err != nil {
+		return fmt.Errorf("下载 neoforge 失败: %w", err)
 	}
 	core.Log("neoforge 安装器下载完成:", installerPath)
 
-	// 提取 version.json
 	versionInfo, err := core.ExtractVersionJson(installerPath)
 	if err != nil {
-		core.Log("提取 version.json 失败:", err)
-		return
+		return fmt.Errorf("提取 version.json 失败: %w", err)
 	}
 
 	librariesDir := "./libraries"
-	if err := DownloadLibraries(versionInfo, librariesDir, config.MaxConnections, config.Download); err != nil {
-		core.Log("下载库文件失败:", err)
-		return
+	if err := DownloadLibraries(versionInfo, librariesDir, config.MaxConnections, config.Download, config.MaxRetries); err != nil {
+		return fmt.Errorf("下载库文件失败: %w", err)
 	}
 
-	if config.Download == "bmclapi" {
-		if err := DownloadServerJar(config.Version, config.Loader, librariesDir); err != nil {
-			core.Log("下载 mc 服务端失败:", err)
-			return
-		}
+	if err := DownloadServerJar(config.Version, config.Loader, librariesDir, config.Download, config.MaxRetries); err != nil {
+		return fmt.Errorf("下载 mc 服务端失败: %w", err)
 	}
 
 	core.Log("库文件下载完成")
-	if err := core.RunInstaller(installerPath, config.Loader, config.Version, config.LoaderVersion, config.Download, simpfun, mise); err != nil {
-		core.Log("运行安装器失败:", err)
+	if err := core.RunInstallerWithFallback(installerPath, config.Loader, config.Version, config.LoaderVersion, config.Download, simpfun, mise, config.MaxRetries); err != nil {
+		return fmt.Errorf("运行安装器失败: %w", err)
 	}
-	core.RunScript(config.Version, config.Loader, config.LoaderVersion, simpfun, mise, config.Argsment)
+	if err := core.RunScript(config.Version, config.Loader, config.LoaderVersion, simpfun, mise, config.Argsment); err != nil {
+		return fmt.Errorf("生成启动脚本失败: %w", err)
+	}
+	return nil
 }
 
-func FetchLatestNeoForgeVersion() (string, error) {
-	resp, err := http.Get("https://maven.neoforged.net/api/maven/latest/version/releases/net/neoforged/neoforge")
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
+func FetchLatestNeoForgeVersion(maxRetries int) (string, error) {
 	var result struct {
 		Version string `json:"version"`
 	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := getJSONWithRetry("https://maven.neoforged.net/api/maven/latest/version/releases/net/neoforged/neoforge", maxRetries, &result); err != nil {
 		return "", err
 	}
-
 	return result.Version, nil
 }
 
-func FetchLatestMatchingNeoForgeVersion(mcVersion string) (string, error) {
-	resp, err := http.Get("https://maven.neoforged.net/api/maven/versions/releases/net/neoforged/neoforge")
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
+func FetchLatestMatchingNeoForgeVersion(mcVersion string, maxRetries int) (string, error) {
 	var result struct {
 		Versions []string `json:"versions"`
 	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := getJSONWithRetry("https://maven.neoforged.net/api/maven/versions/releases/net/neoforged/neoforge", maxRetries, &result); err != nil {
 		return "", err
 	}
 
@@ -131,5 +101,8 @@ func FetchLatestMatchingNeoForgeVersion(mcVersion string) (string, error) {
 		return "", fmt.Errorf("没有找到匹配 Minecraft 版本 %s 的 LoaderVersion", mcVersion)
 	}
 
-	return matchedVersions[len(matchedVersions)-1], nil
+	sort.Slice(matchedVersions, func(i, j int) bool {
+		return compareVersionTokens(matchedVersions[i], matchedVersions[j]) > 0
+	})
+	return matchedVersions[0], nil
 }

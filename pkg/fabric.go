@@ -6,13 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/autoinst/AutoInstall/core"
 )
@@ -39,26 +37,24 @@ type parsedLib struct {
 	Skip      bool   // 跳过标记（如 native）
 }
 
-func FabricB(config core.InstConfig, simpfun bool, mise bool) {
+func FabricB(config core.InstConfig, simpfun bool, mise bool) error {
+	core.ApplyConfigDefaults(&config)
 	if config.Version == "latest" {
-		latestRelease, err := FetchLatestFabricMinecraftVersion()
+		latestRelease, err := FetchLatestFabricMinecraftVersion(config.Download, config.MaxRetries)
 		if err != nil {
-			core.Log("获取最新我的世界版本失败:", err)
-			return
+			return fmt.Errorf("获取最新我的世界版本失败: %w", err)
 		}
 		config.Version = latestRelease
-		stableLoader, err := FetchLatestStableFabricLoaderVersion()
+		stableLoader, err := FetchLatestStableFabricLoaderVersion(config.Download, config.MaxRetries)
 		if err != nil {
-			core.Log("获取最新 Fabric Loader 版本失败:", err)
-			return
+			return fmt.Errorf("获取最新 Fabric Loader 版本失败: %w", err)
 		}
 		config.LoaderVersion = stableLoader
 	}
 	if config.LoaderVersion == "latest" {
-		stableLoader, err := FetchLatestStableFabricLoaderVersion()
+		stableLoader, err := FetchLatestStableFabricLoaderVersion(config.Download, config.MaxRetries)
 		if err != nil {
-			core.Log("获取最新 Fabric Loader 版本失败:", err)
-			return
+			return fmt.Errorf("获取最新 Fabric Loader 版本失败: %w", err)
 		}
 		config.LoaderVersion = stableLoader
 	}
@@ -66,31 +62,25 @@ func FabricB(config core.InstConfig, simpfun bool, mise bool) {
 	baseDir := "."
 	libsDir := filepath.Join(baseDir, "libraries")
 
-	client := &http.Client{Timeout: 30 * time.Second}
-	meta, err := queryLoaderServerMeta(client, config.Version, config.LoaderVersion)
+	meta, err := queryLoaderServerMeta(config.Version, config.LoaderVersion, config.Download, config.MaxRetries)
 	if err != nil {
-		core.Log("查询元数据失败:", err)
-		return
+		return fmt.Errorf("查询元数据失败: %w", err)
 	}
 
 	libs, err := parseLibraries(meta)
 	if err != nil {
-		core.Log("解析库失败:", err)
-		return
+		return fmt.Errorf("解析库失败: %w", err)
 	}
 
 	if err := os.MkdirAll(baseDir, 0o755); err != nil {
-		core.Log("创建基础目录失败:", err)
-		return
+		return fmt.Errorf("创建基础目录失败: %w", err)
 	}
 	if err := os.MkdirAll(libsDir, 0o755); err != nil {
-		core.Log("创建库目录失败:", err)
-		return
+		return fmt.Errorf("创建库目录失败: %w", err)
 	}
 
-	if err := DownloadServerJar(config.Version, config.Loader, libsDir); err != nil {
-		core.Log("下载服务端失败:", err)
-		return
+	if err := DownloadServerJar(config.Version, config.Loader, libsDir, config.Download, config.MaxRetries); err != nil {
+		return fmt.Errorf("下载服务端失败: %w", err)
 	}
 
 	var libraryFiles []string
@@ -111,8 +101,7 @@ func FabricB(config core.InstConfig, simpfun bool, mise bool) {
 
 		target := filepath.Join(libsDir, filepath.FromSlash(lib.RelPath))
 		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-			core.Log("创建库目录失败:", err)
-			return
+			return fmt.Errorf("创建库目录失败: %w", err)
 		}
 		libraryFiles = append(libraryFiles, target)
 
@@ -128,8 +117,9 @@ func FabricB(config core.InstConfig, simpfun bool, mise bool) {
 					errChan <- fmt.Errorf("复制库 %s 失败: %w", libInputPath, err)
 				}
 			} else {
-				core.Log("下载库:", libURL, "->", filePath)
-				if err := downloadFileFabric(client, libURL, filePath); err != nil {
+				currentURL, fallbackURL := downloadURLPair(libURL, config.Download)
+				core.Log("下载库:", currentURL, "->", filePath)
+				if err := core.DownloadFileWithFallback(currentURL, fallbackURL, filePath, config.MaxRetries); err != nil {
 					errChan <- fmt.Errorf("下载库 %s 失败: %w", libURL, err)
 				}
 			}
@@ -140,12 +130,10 @@ func FabricB(config core.InstConfig, simpfun bool, mise bool) {
 	close(errChan)
 	for err := range errChan {
 		if err != nil {
-			core.Log("库下载失败:", err)
-			return
+			return fmt.Errorf("库下载失败: %w", err)
 		}
 	}
 
-	// 确定启动类
 	launchMainClass := extractLaunchMainClass(meta)
 	if launchMainClass == "" {
 		core.Log("警告: 无法从元数据确定启动 mainClass，将留空")
@@ -155,47 +143,34 @@ func FabricB(config core.InstConfig, simpfun bool, mise bool) {
 	launchJarPath := filepath.Join(baseDir, launchJarName)
 	core.Log("生成启动 jar:", launchJarPath)
 	if err := makeLaunchJar(launchJarPath, launchMainClass, jarMainClass, libraryFiles, false); err != nil {
-		core.Log("生成启动 jar 失败:", err)
-		return
+		return fmt.Errorf("生成启动 jar 失败: %w", err)
 	}
 
 	core.Log("Fabric 安装完成!")
-	core.RunScript(config.Version, config.Loader, config.LoaderVersion, simpfun, mise, config.Argsment)
+	if err := core.RunScript(config.Version, config.Loader, config.LoaderVersion, simpfun, mise, config.Argsment); err != nil {
+		return fmt.Errorf("生成启动脚本失败: %w", err)
+	}
+	return nil
 }
 
-func FetchLatestFabricMinecraftVersion() (string, error) {
-	resp, err := http.Get("https://launchermeta.mojang.com/mc/game/version_manifest.json")
+func FetchLatestFabricMinecraftVersion(downloadSource string, maxRetries int) (string, error) {
+	result, err := fetchVersionManifest(downloadSource, maxRetries)
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
-
-	var result struct {
-		Latest struct {
-			Release string `json:"release"`
-		} `json:"latest"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return "", err
-	}
-
 	return result.Latest.Release, nil
 }
 
-func FetchLatestStableFabricLoaderVersion() (string, error) {
-	resp, err := http.Get("https://meta.fabricmc.net/v2/versions/loader")
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
+func FetchLatestStableFabricLoaderVersion(downloadSource string, maxRetries int) (string, error) {
+	officialURL := "https://meta.fabricmc.net/v2/versions/loader"
+	mirrorURL := "https://bmclapi2.bangbang93.com/fabric-meta/v2/versions/loader"
+	currentURL, fallbackURL := sourceURLPair(officialURL, mirrorURL, downloadSource)
 
 	var versions []struct {
 		Version string `json:"version"`
 		Stable  bool   `json:"stable"`
 	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&versions); err != nil {
+	if err := getJSONWithFallback(currentURL, fallbackURL, maxRetries, &versions); err != nil {
 		return "", err
 	}
 
@@ -208,17 +183,16 @@ func FetchLatestStableFabricLoaderVersion() (string, error) {
 	return "", fmt.Errorf("未找到稳定版本的Fabric Loader")
 }
 
-func queryLoaderServerMeta(client *http.Client, mcVersion, loaderVersion string) (*metaResult, error) {
-	url := fmt.Sprintf("https://meta.fabricmc.net/v2/versions/loader/%s/%s/server/json", mcVersion, loaderVersion)
-	resp, err := client.Get(url)
+func queryLoaderServerMeta(mcVersion, loaderVersion string, downloadSource string, maxRetries int) (*metaResult, error) {
+	officialURL := fmt.Sprintf("https://meta.fabricmc.net/v2/versions/loader/%s/%s/server/json", mcVersion, loaderVersion)
+	mirrorURL := fmt.Sprintf("https://bmclapi2.bangbang93.com/fabric-meta/v2/versions/loader/%s/%s/server/json", mcVersion, loaderVersion)
+	currentURL, fallbackURL := sourceURLPair(officialURL, mirrorURL, downloadSource)
+
+	resp, err := core.GetWithFallback(currentURL, fallbackURL, maxRetries)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		b, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("meta responded %d: %s", resp.StatusCode, string(b))
-	}
 
 	var raw map[string]interface{}
 	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
@@ -359,31 +333,13 @@ func extractLaunchMainClass(meta *metaResult) string {
 	return ""
 }
 
-func downloadFileFabric(client *http.Client, url, target string) error {
-	resp, err := client.Get(url)
-	if err != nil {
-		return err
+func writeManifestAttribute(buf *bytes.Buffer, name string, value string) {
+	line := name + ": " + value
+	for len(line) > 70 {
+		buf.WriteString(line[:70] + "\r\n")
+		line = " " + line[70:]
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("download %s returned %d: %s", url, resp.StatusCode, string(body))
-	}
-
-	tmp := target + ".tmp"
-	out, err := os.Create(tmp)
-	if err != nil {
-		return err
-	}
-	_, err = io.Copy(out, resp.Body)
-	if err2 := out.Close(); err == nil {
-		err = err2
-	}
-	if err != nil {
-		_ = os.Remove(tmp)
-		return err
-	}
-	return os.Rename(tmp, target)
+	buf.WriteString(line + "\r\n")
 }
 
 func copyFileFabric(src, dst string) error {
@@ -427,9 +383,9 @@ func makeLaunchJar(file, launchMainClass, jarMainClass string, libraryFiles []st
 		return err
 	}
 	var buf bytes.Buffer
-	buf.WriteString("Manifest-Version: 1.0\r\n")
+	writeManifestAttribute(&buf, "Manifest-Version", "1.0")
 	if jarMainClass != "" {
-		buf.WriteString("Main-Class: " + jarMainClass + "\r\n")
+		writeManifestAttribute(&buf, "Main-Class", jarMainClass)
 	}
 	if !shade {
 		relPaths := make([]string, 0, len(libraryFiles))
@@ -442,7 +398,7 @@ func makeLaunchJar(file, launchMainClass, jarMainClass string, libraryFiles []st
 			relPaths = append(relPaths, rel)
 		}
 		if len(relPaths) > 0 {
-			buf.WriteString("Class-Path: " + strings.Join(relPaths, " ") + "\r\n")
+			writeManifestAttribute(&buf, "Class-Path", strings.Join(relPaths, " "))
 		}
 	}
 	buf.WriteString("\r\n")

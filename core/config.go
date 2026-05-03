@@ -7,22 +7,22 @@ import (
 	"log"
 )
 
-// InstConfig 结构体表示 inst.json 的内容
+const DefaultMaxRetries = 3
+
 type InstConfig struct {
 	Version        string `json:"version"`
 	Loader         string `json:"loader"`
 	LoaderVersion  string `json:"loaderVersion"`
 	Download       string `json:"download"`
 	MaxConnections int    `json:"maxconnections"`
+	MaxRetries     int    `json:"maxretries"`
 	Argsment       string `json:"argsment"`
 }
 
-// Config 定义配置文件的结构
 type Config struct {
 	MaxConnections int `json:"maxconnections"`
 }
 
-// Library 定义库的结构
 type Library struct {
 	Name      string `json:"name"`
 	Downloads struct {
@@ -34,12 +34,21 @@ type Library struct {
 	} `json:"downloads"`
 }
 
-// VersionInfo 定义 version.json 文件的结构
 type VersionInfo struct {
 	Libraries []Library `json:"libraries"`
 }
 
-// 从 JAR 文件中提取 version.json
+func NormalizeRetries(retries int) int {
+	if retries <= 0 {
+		return DefaultMaxRetries
+	}
+	return retries
+}
+
+func ApplyConfigDefaults(config *InstConfig) {
+	config.MaxRetries = NormalizeRetries(config.MaxRetries)
+}
+
 func ExtractVersionJson(jarFilePath string) (VersionInfo, error) {
 	var versionInfo VersionInfo
 	r, err := zip.OpenReader(jarFilePath)

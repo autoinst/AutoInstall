@@ -2,10 +2,13 @@ package pkg
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -40,42 +43,73 @@ func (e *CFError) Error() string {
 	return fmt.Sprintf("响应异常: %d %s", e.StatusCode, e.Body)
 }
 
-// resolveCFDownloadURL 使用 CurseForge API 获取可用直链
-// 需要环境变量 CF_API_KEY，可在 https://console.curseforge.com/ 申请
-func resolveCFDownloadURL(projectID, fileID int) (string, error) {
+func resolveCFDownloadURL(projectID, fileID int, maxRetries int) (string, error) {
 	if cfapiKey == "" {
 		return "", fmt.Errorf("缺少 CF_API_KEY")
 	}
-	// 直接获取下载直链
-	req, err := http.NewRequest("GET", fmt.Sprintf("https://api.curseforge.com/v1/mods/%d/files/%d/download-url", projectID, fileID), nil)
-	if err != nil {
-		return "", err
+	maxRetries = core.NormalizeRetries(maxRetries)
+	url := fmt.Sprintf("https://api.curseforge.com/v1/mods/%d/files/%d/download-url", projectID, fileID)
+	var lastErr error
+	for i := 0; i < maxRetries; i++ {
+		req, err := http.NewRequest("GET", url, nil)
+		if err != nil {
+			return "", err
+		}
+		req.Header.Set("Accept", "application/json")
+		req.Header.Set("x-api-key", cfapiKey)
+		req.Header.Set("User-Agent", "autoinst/1.3.0")
+		resp, err := core.HTTPClient.Do(req)
+		if err != nil {
+			lastErr = err
+			core.Logf("获取 CurseForge 直链失败 %d/%d: %v\n", i+1, maxRetries, err)
+			continue
+		}
+		if resp.StatusCode != http.StatusOK {
+			b, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			lastErr = &CFError{StatusCode: resp.StatusCode, Body: string(b)}
+			core.Logf("获取 CurseForge 直链失败 %d/%d: %v\n", i+1, maxRetries, lastErr)
+			continue
+		}
+		var out struct {
+			Data string `json:"data"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+			resp.Body.Close()
+			lastErr = err
+			core.Logf("解析 CurseForge 直链失败 %d/%d: %v\n", i+1, maxRetries, err)
+			continue
+		}
+		resp.Body.Close()
+		if out.Data == "" {
+			lastErr = fmt.Errorf("CF API 未返回下载地址")
+			core.Logf("获取 CurseForge 直链失败 %d/%d: %v\n", i+1, maxRetries, lastErr)
+			continue
+		}
+		return out.Data, nil
 	}
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("x-api-key", cfapiKey)
-	req.Header.Set("User-Agent", "autoinst/1.3.0")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		b, _ := io.ReadAll(resp.Body)
-		return "", &CFError{StatusCode: resp.StatusCode, Body: string(b)}
-	}
-	var out struct {
-		Data string `json:"data"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-		return "", err
-	}
-	if out.Data == "" {
-		return "", fmt.Errorf("CF API 未返回下载地址")
-	}
-	return out.Data, nil
+	return "", fmt.Errorf("多次获取 CurseForge 直链失败 (共 %d 次): %w", maxRetries, lastErr)
 }
 
-func CurseForge(file string, MaxCon int, Args string, bundleName string) {
+func curseForgeDownloadFilename(downloadURL string, fileID int) string {
+	filename := fmt.Sprintf("%d.jar", fileID)
+	parsed, err := url.Parse(downloadURL)
+	if err != nil {
+		return filename
+	}
+	base := path.Base(parsed.EscapedPath())
+	if base == "." || base == "/" || base == "" {
+		return filename
+	}
+	decoded, err := url.PathUnescape(base)
+	if err != nil || decoded == "" {
+		return filename
+	}
+	return filepath.Base(decoded)
+}
+
+func CurseForge(file string, MaxCon int, Args string, bundleName string, MaxRetries int, baseConfig core.InstConfig) error {
+	MaxRetries = core.NormalizeRetries(MaxRetries)
 	mf := "manifest.json"
 	if file != "" && strings.HasSuffix(strings.ToLower(file), ".json") {
 		mf = file
@@ -83,15 +117,13 @@ func CurseForge(file string, MaxCon int, Args string, bundleName string) {
 	mfPath := filepath.Join("./", mf)
 	mfFile, err := os.Open(mfPath)
 	if err != nil {
-		core.Log("未找到 manifest.json，停止 CurseForge 安装流程")
-		return
+		return fmt.Errorf("未找到 manifest.json，停止 CurseForge 安装流程: %w", err)
 	}
 	defer mfFile.Close()
 
 	var manifest CurseForgeManifest
 	if err := json.NewDecoder(mfFile).Decode(&manifest); err != nil {
-		core.Log("解析 manifest.json 失败:", err)
-		return
+		return fmt.Errorf("解析 manifest.json 失败: %w", err)
 	}
 
 	overridesDir := manifest.Overrides
@@ -99,16 +131,11 @@ func CurseForge(file string, MaxCon int, Args string, bundleName string) {
 		overridesDir = "overrides"
 	}
 	if err := moveOverrides(filepath.Join("./", overridesDir)); err != nil {
-		core.Log("移动 overrides 文件失败:", err)
-		return
+		return fmt.Errorf("移动 overrides 文件失败: %w", err)
 	}
 
-	inst := core.InstConfig{
-		Version:        manifest.Minecraft.Version,
-		Download:       "bmclapi",
-		MaxConnections: 32,
-		Argsment:       "-Xmx{maxmen}M -Xms{maxmen}M -XX:+AlwaysPreTouch -XX:+DisableExplicitGC -XX:+ParallelRefProcEnabled -XX:+PerfDisableSharedMem -XX:+UnlockExperimentalVMOptions -XX:+UseG1GC -XX:G1HeapRegionSize=8M -XX:G1HeapWastePercent=5 -XX:G1MaxNewSizePercent=40 -XX:G1MixedGCCountTarget=4 -XX:G1MixedGCLiveThresholdPercent=90 -XX:G1NewSizePercent=30 -XX:G1RSetUpdatingPauseTimePercent=5 -XX:G1ReservePercent=20 -XX:InitiatingHeapOccupancyPercent=15 -XX:MaxGCPauseMillis=200 -XX:MaxTenuringThreshold=1 -XX:SurvivorRatio=32 -Dusing.aikars.flags=https://mcflags.emc.gs -Daikars.new.flags=true",
-	}
+	inst := modpackBaseConfig(baseConfig, MaxRetries)
+	inst.Version = manifest.Minecraft.Version
 
 	loaderID := ""
 	if len(manifest.Minecraft.ModLoaders) > 0 {
@@ -143,86 +170,84 @@ func CurseForge(file string, MaxCon int, Args string, bundleName string) {
 	}
 	jsonData, err := json.MarshalIndent(inst, "", "  ")
 	if err != nil {
-		core.Log("生成 inst.json 失败:", err)
-		return
+		return fmt.Errorf("生成 inst.json 失败: %w", err)
 	}
 	if err := os.WriteFile("inst.json", jsonData, 0777); err != nil {
-		core.Log("写入 inst.json 失败:", err)
-		return
+		return fmt.Errorf("写入 inst.json 失败: %w", err)
 	}
 
 	if len(manifest.Files) == 0 {
 		runInstalledModFilter(bundleName)
-		return
+		return nil
 	}
 
-	DownloadWg.Add(1)
-	go func() {
-		defer DownloadWg.Done()
-		var wg sync.WaitGroup
-		maxConcurrency := 24
-		if MaxCon > 0 {
-			maxConcurrency = MaxCon
+	var wg sync.WaitGroup
+	maxConcurrency := 24
+	if MaxCon > 0 {
+		maxConcurrency = MaxCon
+	}
+	semaphore := make(chan struct{}, maxConcurrency)
+	errChan := make(chan error, len(manifest.Files))
+
+	modsDir := filepath.Join(".", "mods")
+	if err := os.MkdirAll(modsDir, os.ModePerm); err != nil {
+		return fmt.Errorf("创建 mods 目录失败: %w", err)
+	}
+
+	for _, mf := range manifest.Files {
+		if !mf.Required {
+			continue
 		}
-		semaphore := make(chan struct{}, maxConcurrency)
-		errChan := make(chan error, len(manifest.Files))
+		wg.Add(1)
+		semaphore <- struct{}{}
 
-		modsDir := filepath.Join(".", "mods")
-		_ = os.MkdirAll(modsDir, os.ModePerm)
+		go func(entry struct {
+			ProjectID int  `json:"projectID"`
+			FileID    int  `json:"fileID"`
+			Required  bool `json:"required"`
+		}) {
+			defer func() { <-semaphore; wg.Done() }()
 
-		for _, mf := range manifest.Files {
-			if !mf.Required {
-				continue
-			}
-			wg.Add(1)
-			semaphore <- struct{}{}
-
-			go func(entry struct {
-				ProjectID int  `json:"projectID"`
-				FileID    int  `json:"fileID"`
-				Required  bool `json:"required"`
-			}) {
-				defer func() { <-semaphore; wg.Done() }()
-
-				url, err := resolveCFDownloadURL(entry.ProjectID, entry.FileID)
-				if err != nil {
-					apiUrl := fmt.Sprintf("https://api.curseforge.com/v1/mods/%d/files/%d/download-url", entry.ProjectID, entry.FileID)
-					respBody := err.Error()
-					if cfErr, ok := err.(*CFError); ok {
-						respBody = cfErr.Body
-					}
-					core.RecordError(apiUrl, err, respBody)
-					errChan <- fmt.Errorf("获取直链失败(Project %d, File %d): %v", entry.ProjectID, entry.FileID, err)
-					return
-				}
-
-				segs := strings.Split(url, "/")
-				filename := fmt.Sprintf("%d.jar", entry.FileID)
-				if len(segs) > 0 && segs[len(segs)-1] != "" {
-					filename = segs[len(segs)-1]
-				}
-				dst := filepath.Join(modsDir, filename)
-				if err := os.MkdirAll(filepath.Dir(dst), os.ModePerm); err != nil {
-					errChan <- err
-					return
-				}
-				core.Log("尝试下载:", url)
-				if err := core.DownloadFile(url, dst); err != nil {
-					core.RecordError(url, err, "Download failed")
-					errChan <- fmt.Errorf("下载失败(Project %d, File %d): %v", entry.ProjectID, entry.FileID, err)
-					return
-				}
-			}(mf)
-		}
-
-		wg.Wait()
-		close(errChan)
-		for err := range errChan {
+			url, err := resolveCFDownloadURL(entry.ProjectID, entry.FileID, MaxRetries)
 			if err != nil {
-				core.Log("下载出错:", err)
+				apiUrl := fmt.Sprintf("https://api.curseforge.com/v1/mods/%d/files/%d/download-url", entry.ProjectID, entry.FileID)
+				respBody := err.Error()
+				if cfErr, ok := err.(*CFError); ok {
+					respBody = cfErr.Body
+				}
+				core.RecordError(apiUrl, err, respBody)
+				errChan <- fmt.Errorf("获取直链失败(Project %d, File %d): %v", entry.ProjectID, entry.FileID, err)
+				return
 			}
-		}
 
-		runInstalledModFilter(bundleName)
-	}()
+			filename := curseForgeDownloadFilename(url, entry.FileID)
+			dst := filepath.Join(modsDir, filename)
+			if err := os.MkdirAll(filepath.Dir(dst), os.ModePerm); err != nil {
+				errChan <- err
+				return
+			}
+			core.Log("尝试下载:", url)
+			if err := core.DownloadFileRetry(url, dst, MaxRetries); err != nil {
+				core.RecordError(url, err, "Download failed")
+				errChan <- fmt.Errorf("下载失败(Project %d, File %d): %v", entry.ProjectID, entry.FileID, err)
+				return
+			}
+		}(mf)
+	}
+
+	wg.Wait()
+	close(errChan)
+	var errs []error
+	for err := range errChan {
+		if err != nil {
+			core.Log("下载出错:", err)
+			errs = append(errs, err)
+		}
+	}
+	if err := errors.Join(errs...); err != nil {
+		return err
+	}
+
+	runInstalledModFilter(bundleName)
+	return nil
 }

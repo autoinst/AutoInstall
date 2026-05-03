@@ -1,15 +1,16 @@
 package pkg
 
 import (
-	"encoding/json"
-	"net/http"
+	"fmt"
 	"os"
 	"regexp"
 
 	"github.com/autoinst/AutoInstall/core"
 )
 
-func Common(config core.InstConfig, cleaninst bool) {
+func Common(config core.InstConfig, cleaninst bool) error {
+	core.ApplyConfigDefaults(&config)
+
 	javaPath, simpfun, mise := core.FindJava()
 	if simpfun {
 		core.Log("已启用 simpfun 环境")
@@ -18,45 +19,50 @@ func Common(config core.InstConfig, cleaninst bool) {
 		}
 	} else {
 		if javaPath == "" {
-			core.Log("未找到 Java，请确保已安装 Java 并设置 PATH。")
-			return
+			return fmt.Errorf("未找到 Java，请确保已安装 Java 并设置 PATH")
 		}
 		core.Log("找到 Java 运行环境:", javaPath)
 	}
 
 	if config.Version != "latest" {
 		matched, _ := regexp.MatchString(`[a-zA-Z]`, config.Version)
-		if matched {
-			if config.Loader == "neoforge" || config.Loader == "forge" {
-				core.Log("安装器不支持安装(Neo)Forge快照/愚人节版本，请使用原版或 Fabric 加载器。")
-				os.Exit(128)
-			}
+		if matched && (config.Loader == "neoforge" || config.Loader == "forge") {
+			return fmt.Errorf("安装器不支持安装(Neo)Forge快照/愚人节版本，请使用原版或 Fabric 加载器")
 		}
 	}
+
 	switch config.Loader {
 	case "neoforge":
-		NeoForgeB(config, simpfun, mise)
+		if err := NeoForgeB(config, simpfun, mise); err != nil {
+			return err
+		}
 	case "forge":
-		ForgeB(config, simpfun, mise)
+		if err := ForgeB(config, simpfun, mise); err != nil {
+			return err
+		}
 	case "fabric":
-		FabricB(config, simpfun, mise)
+		if err := FabricB(config, simpfun, mise); err != nil {
+			return err
+		}
 	case "vanilla":
 		if config.Version == "latest" {
-			latestSnapshot, err := FetchLatestVanillaVersion(config.Download)
+			latestSnapshot, err := FetchLatestVanillaVersion(config.Download, config.MaxRetries)
 			if err != nil {
-				core.Log("获取最新 Minecraft 版本失败:", err)
-				return
+				return fmt.Errorf("获取最新 Minecraft 版本失败: %w", err)
 			}
 			config.Version = latestSnapshot
 		}
 
 		librariesDir := "./libraries"
-		if err := DownloadServerJar(config.Version, config.Loader, librariesDir); err != nil {
-			core.Log("下载 mc 服务端失败:", err)
-			return
+		if err := DownloadServerJar(config.Version, config.Loader, librariesDir, config.Download, config.MaxRetries); err != nil {
+			return fmt.Errorf("下载 mc 服务端失败: %w", err)
 		}
 		core.Log("服务端下载完成")
-		core.RunScript(config.Version, config.Loader, config.LoaderVersion, simpfun, mise, config.Argsment)
+		if err := core.RunScript(config.Version, config.Loader, config.LoaderVersion, simpfun, mise, config.Argsment); err != nil {
+			return fmt.Errorf("生成启动脚本失败: %w", err)
+		}
+	default:
+		return fmt.Errorf("未知加载器: %s", config.Loader)
 	}
 
 	if cleaninst {
@@ -79,31 +85,50 @@ func Common(config core.InstConfig, cleaninst bool) {
 		}
 		core.Log("清理完成")
 	}
+	return nil
 }
 
-func FetchLatestVanillaVersion(downloadSource string) (string, error) {
-	var url string
-	if downloadSource == "bmclapi" {
-		url = "https://bmclapi2.bangbang93.com/mc/game/version_manifest.json"
-	} else {
-		url = "https://launchermeta.mojang.com/mc/game/version_manifest.json"
-	}
-
-	resp, err := http.Get(url)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
+func FetchLatestVanillaVersion(downloadSource string, maxRetries int) (string, error) {
+	officialURL := "https://launchermeta.mojang.com/mc/game/version_manifest.json"
+	mirrorURL := "https://bmclapi2.bangbang93.com/mc/game/version_manifest.json"
+	currentURL, fallbackURL := sourceURLPair(officialURL, mirrorURL, downloadSource)
 
 	var result struct {
 		Latest struct {
 			Snapshot string `json:"snapshot"`
 		} `json:"latest"`
 	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := getJSONWithFallback(currentURL, fallbackURL, maxRetries, &result); err != nil {
 		return "", err
 	}
-
 	return result.Latest.Snapshot, nil
+}
+
+func fetchVersionManifest(downloadSource string, maxRetries int) (struct {
+	Latest struct {
+		Release  string `json:"release"`
+		Snapshot string `json:"snapshot"`
+	} `json:"latest"`
+}, error) {
+	officialURL := "https://launchermeta.mojang.com/mc/game/version_manifest.json"
+	mirrorURL := "https://bmclapi2.bangbang93.com/mc/game/version_manifest.json"
+	currentURL, fallbackURL := sourceURLPair(officialURL, mirrorURL, downloadSource)
+
+	var result struct {
+		Latest struct {
+			Release  string `json:"release"`
+			Snapshot string `json:"snapshot"`
+		} `json:"latest"`
+	}
+	if err := getJSONWithFallback(currentURL, fallbackURL, maxRetries, &result); err != nil {
+		return result, err
+	}
+	return result, nil
+}
+
+func sourceURLPair(officialURL, mirrorURL, downloadSource string) (string, string) {
+	if downloadSource == "bmclapi" {
+		return mirrorURL, officialURL
+	}
+	return officialURL, mirrorURL
 }
