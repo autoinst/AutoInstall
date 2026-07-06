@@ -79,7 +79,7 @@ func FabricB(config core.InstConfig, simpfun bool, mise bool) error {
 		return fmt.Errorf("创建库目录失败: %w", err)
 	}
 
-	if err := DownloadServerJar(config.Version, config.Loader, libsDir, config.Download, config.MaxRetries); err != nil {
+	if err := DownloadServerJar(config.Version, config.Loader, libsDir, config.Download, config.MaxRetries, ""); err != nil {
 		return fmt.Errorf("下载服务端失败: %w", err)
 	}
 
@@ -147,7 +147,7 @@ func FabricB(config core.InstConfig, simpfun bool, mise bool) error {
 	}
 
 	core.Log("Fabric 安装完成!")
-	if err := core.RunScript(config.Version, config.Loader, config.LoaderVersion, simpfun, mise, config.Argsment); err != nil {
+	if err := core.RunScript(config.Version, config.Loader, config.LoaderVersion, simpfun, mise, config.Argsment, ""); err != nil {
 		return fmt.Errorf("生成启动脚本失败: %w", err)
 	}
 	return nil

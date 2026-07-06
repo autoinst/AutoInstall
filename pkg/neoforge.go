@@ -48,23 +48,19 @@ func NeoForgeB(config core.InstConfig, simpfun bool, mise bool) error {
 
 	versionInfo, err := core.ExtractVersionJson(installerPath)
 	if err != nil {
-		return fmt.Errorf("提取 version.json 失败: %w", err)
+		return fmt.Errorf("提取安装器元数据失败: %w", err)
 	}
 
 	librariesDir := "./libraries"
-	if err := DownloadLibraries(versionInfo, librariesDir, config.MaxConnections, config.Download, config.MaxRetries); err != nil {
-		return fmt.Errorf("下载库文件失败: %w", err)
+	if err := DownloadLibrariesAndServerJar(versionInfo, config.Version, config.Loader, librariesDir, config.MaxConnections, config.Download, config.MaxRetries); err != nil {
+		return err
 	}
 
-	if err := DownloadServerJar(config.Version, config.Loader, librariesDir, config.Download, config.MaxRetries); err != nil {
-		return fmt.Errorf("下载 mc 服务端失败: %w", err)
-	}
-
-	core.Log("库文件下载完成")
-	if err := core.RunInstallerWithFallback(installerPath, config.Loader, config.Version, config.LoaderVersion, config.Download, simpfun, mise, config.MaxRetries); err != nil {
+	core.Log("库文件和服务端下载完成")
+	if err := core.RunInstallerWithFallback(installerPath, config.Loader, config.Version, config.LoaderVersion, config.Download, simpfun, mise, config.MaxRetries, versionInfo.InstallFilePath); err != nil {
 		return fmt.Errorf("运行安装器失败: %w", err)
 	}
-	if err := core.RunScript(config.Version, config.Loader, config.LoaderVersion, simpfun, mise, config.Argsment); err != nil {
+	if err := core.RunScript(config.Version, config.Loader, config.LoaderVersion, simpfun, mise, config.Argsment, versionInfo.InstallFilePath); err != nil {
 		return fmt.Errorf("生成启动脚本失败: %w", err)
 	}
 	return nil

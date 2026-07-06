@@ -154,6 +154,7 @@ func RunInstallerWithFallback(
 	simpfun bool,
 	mise bool,
 	retries int,
+	installFilePath string,
 ) error {
 	retries = NormalizeRetries(retries)
 	currentSource := downloadSource
@@ -166,13 +167,13 @@ func RunInstallerWithFallback(
 		fallbackSource = "official"
 	}
 
-	currentErr := runInstallerRetry(installerPath, loader, version, loaderVersion, currentSource, simpfun, mise, retries)
+	currentErr := runInstallerRetry(installerPath, loader, version, loaderVersion, currentSource, simpfun, mise, retries, installFilePath)
 	if currentErr == nil {
 		return nil
 	}
 
 	Log("当前源运行安装器失败，切换备用源")
-	fallbackErr := runInstallerRetry(installerPath, loader, version, loaderVersion, fallbackSource, simpfun, mise, retries)
+	fallbackErr := runInstallerRetry(installerPath, loader, version, loaderVersion, fallbackSource, simpfun, mise, retries, installFilePath)
 	if fallbackErr == nil {
 		return nil
 	}
@@ -188,6 +189,7 @@ func runInstallerRetry(
 	simpfun bool,
 	mise bool,
 	retries int,
+	installFilePath string,
 ) error {
 	var lastErr error
 	for i := 0; i < retries; i++ {
@@ -196,6 +198,11 @@ func runInstallerRetry(
 			Logf("运行安装器失败 %d/%d: %v\n", i+1, retries, err)
 			continue
 		}
+		// if err := ValidateInstalledServerArtifacts(version, loader, loaderVersion, installFilePath); err != nil {
+		// 	lastErr = fmt.Errorf("安装器退出成功但产物校验失败: %w", err)
+		// 	Logf("运行安装器失败 %d/%d: %v\n", i+1, retries, lastErr)
+		// 	continue
+		// }
 		return nil
 	}
 	return fmt.Errorf("多次运行安装器失败 (共 %d 次): %w", retries, lastErr)
@@ -234,6 +241,60 @@ func FindJava() (string, bool, bool) {
 	return "", simpfun, mise
 }
 
+func ValidateInstalledServerArtifacts(version, loader, loaderVersion, installFilePath string) error {
+	if loader != "forge" && loader != "neoforge" {
+		return nil
+	}
+
+	artifactPath, err := installedServerArtifactPath(version, loader, loaderVersion, installFilePath)
+	if err != nil {
+		return err
+	}
+	info, err := os.Stat(artifactPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("安装产物不存在: %s", artifactPath)
+		}
+		return fmt.Errorf("检查安装产物失败 %s: %w", artifactPath, err)
+	}
+	if info.IsDir() {
+		return fmt.Errorf("安装产物不是文件: %s", artifactPath)
+	}
+	if info.Size() <= 0 {
+		return fmt.Errorf("安装产物为空: %s", artifactPath)
+	}
+	return nil
+}
+
+func installedServerArtifactPath(version, loader, loaderVersion, installFilePath string) (string, error) {
+	switch loader {
+	case "forge":
+		if runtimeJava(version) <= 8 {
+			if path := strings.TrimSpace(installFilePath); path != "" {
+				cleanPath, err := cleanRelativeArtifactPath(path)
+				if err != nil {
+					return "", err
+				}
+				return cleanPath, nil
+			}
+			return fmt.Sprintf("forge-%s-%s.jar", version, loaderVersion), nil
+		}
+		return filepath.Join("libraries", "net", "minecraftforge", "forge", version+"-"+loaderVersion, "unix_args.txt"), nil
+	case "neoforge":
+		return filepath.Join("libraries", "net", "neoforged", "neoforge", loaderVersion, "unix_args.txt"), nil
+	default:
+		return "", fmt.Errorf("无法为加载器 %s 校验安装产物", loader)
+	}
+}
+
+func cleanRelativeArtifactPath(path string) (string, error) {
+	path = filepath.Clean(filepath.FromSlash(path))
+	if path == "." || filepath.IsAbs(path) || path == ".." || strings.HasPrefix(path, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("安装产物路径不合法: %s", path)
+	}
+	return path, nil
+}
+
 func RunScript(
 	Version string,
 	Loader string,
@@ -241,7 +302,11 @@ func RunScript(
 	simpfun bool,
 	mise bool,
 	argsment string,
+	installFilePath string,
 ) error {
+	// if err := ValidateInstalledServerArtifacts(Version, Loader, LoaderVersion, installFilePath); err != nil {
+	// 	return err
+	// }
 
 	mem, err := strconv.Atoi(os.Getenv("SERVER_MEMORY"))
 	if err != nil || mem <= 1500 {
@@ -275,9 +340,13 @@ func RunScript(
 	switch Loader {
 	case "forge":
 		if javaMajor <= 8 {
+			artifactPath, err := installedServerArtifactPath(Version, Loader, LoaderVersion, installFilePath)
+			if err != nil {
+				return err
+			}
 			script = fmt.Sprintf(
-				"%s %s -jar forge-%s-%s.jar",
-				javaPath, argsment, Version, LoaderVersion,
+				"%s %s -jar %s",
+				javaPath, argsment, filepath.ToSlash(artifactPath),
 			)
 		} else {
 			script = fmt.Sprintf(
