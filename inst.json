@@ -1,9 +1,11 @@
 {
-    "version": "1.21.1",
-    "loader": "neoforge",
-    "loaderVersion": "21.1.123",
-    "download": "bmclapi",
-    "maxconnections": 10,
-    "maxretries": 3,
-    "argsment": "-Xmx$(( (${SERVER_MEMORY:-4096}) - 1500 ))M -Xms$(( (${SERVER_MEMORY:-4096}) - 1500 ))M"
+  "version": "1.21.1",
+  "loader": "neoforge",
+  "loaderVersion": "latest",
+  "download": "official",
+  "maxconnections": 4,
+  "maxretries": 3,
+  "argsment": "",
+  "followModpackFilenames": true,
+  "enableModClassifier": false
 }
