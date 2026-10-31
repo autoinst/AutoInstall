@@ -1,8 +1,10 @@
 package pkg
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -12,7 +14,15 @@ import (
 func ForgeB(config core.InstConfig, simpfun bool, mise bool) error {
 	core.ApplyConfigDefaults(&config)
 	var err error
-	config, err = resolveForgeTarget(config, FetchLatestForgeVersion, fetchForgeVersionsForMinecraft)
+	config, err = resolveForgeTarget(config,
+		func(retries int) (string, string, error) {
+			return FetchLatestForgeVersion(retries, config.Download)
+		},
+		fetchForgeVersionsForMinecraft,
+		func(mc string, retries int) (string, error) {
+			return FetchLatestForgeLoaderForVersion(mc, retries, config.Download)
+		},
+	)
 	if err != nil {
 		return err
 	}
@@ -60,7 +70,82 @@ func forgeInstallerURL(mcVersion, loaderVersion string) string {
 	)
 }
 
-func FetchLatestForgeVersion(maxRetries int) (string, string, error) {
+const forgePromotionsURL = "https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json"
+
+var forgePromotionVersionPattern = regexp.MustCompile(`^[0-9]+(\.[0-9]+)+$`)
+
+func FetchLatestForgeVersion(maxRetries int, sources ...string) (string, string, error) {
+	source := "official"
+	if len(sources) > 0 {
+		source = sources[0]
+	}
+	return fetchForgeVersion("", maxRetries, source)
+}
+
+func fetchForgeVersion(mcVersion string, maxRetries int, source string) (string, string, error) {
+	official := func() (string, string, error) {
+		var result struct {
+			Promos map[string]string `json:"promos"`
+		}
+		if err := getJSONWithRetry(forgePromotionsURL, maxRetries, &result); err != nil {
+			return "", "", err
+		}
+		return forgePromotionTarget(result.Promos, mcVersion)
+	}
+	mirror := func() (string, string, error) {
+		if mcVersion == "" {
+			return fetchLatestForgeVersionFromMirror(maxRetries)
+		}
+		versions, err := fetchForgeVersionsForMinecraft(mcVersion, maxRetries)
+		if err != nil {
+			return "", "", err
+		}
+		loader, err := latestForgeFromVersions(mcVersion, versions)
+		return mcVersion, loader, err
+	}
+	primary, fallback := official, mirror
+	if source == "bmclapi" {
+		primary, fallback = mirror, official
+	}
+	mc, loader, primaryErr := primary()
+	if primaryErr == nil {
+		return mc, loader, nil
+	}
+	mc, loader, fallbackErr := fallback()
+	if fallbackErr == nil {
+		return mc, loader, nil
+	}
+	return "", "", fmt.Errorf("查询 Forge 版本失败: %w", errors.Join(primaryErr, fallbackErr))
+}
+
+func forgePromotionTarget(promos map[string]string, mcVersion string) (string, string, error) {
+	if mcVersion != "" {
+		loader := strings.TrimSpace(promos[mcVersion+"-latest"])
+		if !forgePromotionVersionPattern.MatchString(loader) {
+			return "", "", fmt.Errorf("Forge promotions 缺少 Minecraft %s 的有效 latest 版本", mcVersion)
+		}
+		return mcVersion, loader, nil
+	}
+	var latestMC, latestLoader string
+	for name, value := range promos {
+		if !strings.HasSuffix(name, "-latest") {
+			continue
+		}
+		mc, loader := strings.TrimSuffix(name, "-latest"), strings.TrimSpace(value)
+		if !forgePromotionVersionPattern.MatchString(mc) || !forgePromotionVersionPattern.MatchString(loader) {
+			continue
+		}
+		if latestMC == "" || compareVersionTokens(mc, latestMC) > 0 {
+			latestMC, latestLoader = mc, loader
+		}
+	}
+	if latestMC == "" {
+		return "", "", fmt.Errorf("Forge promotions 没有有效的 latest 版本")
+	}
+	return latestMC, latestLoader, nil
+}
+
+func fetchLatestForgeVersionFromMirror(maxRetries int) (string, string, error) {
 	var result struct {
 		Build struct {
 			McVersion string `json:"mcversion"`
@@ -70,7 +155,11 @@ func FetchLatestForgeVersion(maxRetries int) (string, string, error) {
 	if err := getJSONWithRetry("https://bmclapi2.bangbang93.com/forge/latest", maxRetries, &result); err != nil {
 		return "", "", err
 	}
-	return result.Build.McVersion, result.Build.Version, nil
+	mc, loader := strings.TrimSpace(result.Build.McVersion), strings.TrimSpace(result.Build.Version)
+	if mc == "" || loader == "" {
+		return "", "", fmt.Errorf("BMCLAPI 最新 Forge 元数据缺少版本")
+	}
+	return mc, loader, nil
 }
 
 func fetchForgeVersionsForMinecraft(mcVersion string, maxRetries int) ([]string, error) {
@@ -90,12 +179,16 @@ func fetchForgeVersionsForMinecraft(mcVersion string, maxRetries int) ([]string,
 	return versions, nil
 }
 
-func FetchLatestForgeLoaderForVersion(mcVersion string, maxRetries int) (string, error) {
-	versions, err := fetchForgeVersionsForMinecraft(mcVersion, maxRetries)
-	if err != nil {
-		return "", err
+func FetchLatestForgeLoaderForVersion(mcVersion string, maxRetries int, sources ...string) (string, error) {
+	source := "official"
+	if len(sources) > 0 {
+		source = sources[0]
 	}
-	return latestForgeFromVersions(mcVersion, versions)
+	if strings.TrimSpace(mcVersion) == "" {
+		return "", fmt.Errorf("查询 Forge 版本时 Minecraft 版本不能为空")
+	}
+	_, loader, err := fetchForgeVersion(mcVersion, maxRetries, source)
+	return loader, err
 }
 
 func latestForgeFromVersions(mc string, versions []string) (string, error) {
@@ -106,7 +199,7 @@ func latestForgeFromVersions(mc string, versions []string) (string, error) {
 	return versions[0], nil
 }
 
-func resolveForgeTarget(config core.InstConfig, latest func(int) (string, string, error), builds func(string, int) ([]string, error)) (core.InstConfig, error) {
+func resolveForgeTarget(config core.InstConfig, latest func(int) (string, string, error), builds func(string, int) ([]string, error), latestForMinecraft func(string, int) (string, error)) (core.InstConfig, error) {
 	mcLatest := config.Version == "latest"
 	if mcLatest {
 		mc, loader, err := latest(config.MaxRetries)
@@ -122,14 +215,21 @@ func resolveForgeTarget(config core.InstConfig, latest func(int) (string, string
 			return config, nil
 		}
 	}
-	if config.LoaderVersion == "latest" || mcLatest {
+	if config.LoaderVersion == "latest" {
+		loader, err := latestForMinecraft(config.Version, config.MaxRetries)
+		if err != nil {
+			return config, fmt.Errorf("获取 Minecraft %s 的最新 Forge 版本失败: %w", config.Version, err)
+		}
+		if strings.TrimSpace(loader) == "" {
+			return config, fmt.Errorf("Minecraft %s 的最新 Forge 版本为空", config.Version)
+		}
+		config.LoaderVersion = loader
+		return config, nil
+	}
+	if mcLatest {
 		versions, err := builds(config.Version, config.MaxRetries)
 		if err != nil {
 			return config, fmt.Errorf("获取 Minecraft %s 的 Forge 版本失败: %w", config.Version, err)
-		}
-		if config.LoaderVersion == "latest" {
-			config.LoaderVersion, err = latestForgeFromVersions(config.Version, versions)
-			return config, err
 		}
 		// A fixed loader is never replaced by a global latest build.
 		for _, version := range versions {

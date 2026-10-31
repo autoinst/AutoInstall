@@ -48,7 +48,13 @@ func TestForgeLatestPreservesFixedFields(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.mc+"/"+tt.loader, func(t *testing.T) {
-			got, err := resolveForgeTarget(core.InstConfig{Version: tt.mc, LoaderVersion: tt.loader}, latest, builds)
+			got, err := resolveForgeTarget(core.InstConfig{Version: tt.mc, LoaderVersion: tt.loader}, latest, builds, func(mc string, retries int) (string, error) {
+				versions, err := builds(mc, retries)
+				if err != nil {
+					return "", err
+				}
+				return latestForgeFromVersions(mc, versions)
+			})
 			if (err != nil) != tt.fail {
 				t.Fatalf("error = %v", err)
 			}

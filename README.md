@@ -56,7 +56,9 @@ AutoInstall使用镜像源[BMCLAPI](https://bmclapidoc.bangbang93.com/)与[MCIM 
 ./AutoInstall --modpack ./modpack.mrpack --mc-version 1.21.1
 ```
 
-覆盖只改变服务端安装目标，**不会转换或升级包内模组**，兼容性需自行确认。`latest` 保留各加载器现有选择规则，不统一为同一种“最新版”；请优先使用整合包声明或已确认兼容的固定版本。
+覆盖只改变服务端安装目标，**不会转换或升级包内模组**，兼容性需自行确认。`latest` 保留各加载器各自的选择规则，不统一为同一种“最新版”；请优先使用整合包声明或已确认兼容的固定版本。
+
+Forge 查询 `latest` 时，`official`（含兼容值 `none`）优先读取官方 `promotions_slim.json` 的 `<Minecraft版本>-latest`，失败、数据无效或缺少对应项时回退 BMCLAPI；`bmclapi` 则优先使用镜像 API，仅在失败或缺项时回退官方 promotions。不会把 `recommended` 当作 `latest`。Minecraft 与 Forge 均为 `latest` 时，官方 promotions 按版本比较选择最新的有效 Minecraft `-latest` 项；显式固定的 Forge 版本不会被替换。
 
 ### 可选的 inst.json
 
@@ -151,7 +153,12 @@ Race 检测需要支持的平台、CGO 和 C 编译器，可运行 `CGO_ENABLED=
 
 ### GitHub Release 自动发布
 
-`.github/workflows/go.yml` 保留推送到 `master` 时的测试及构建附件，同时在 GitHub Release **发布**（`published`）时执行发布流程；仅创建 tag 或保存草稿不会触发发布。
+工作流按职责拆分：
+
+- `.github/workflows/go.yml`：推送到 `master` 时执行测试和多架构构建、保存构建附件；同时提供可复用的 `workflow_call` 入口。
+- `.github/workflows/release.yml`：仅在 GitHub Release **发布**（`published`）时触发，解析版本后调用 `go.yml` 完成测试构建，再上传发布附件并补全空白说明。仅创建 tag 或保存草稿不会触发发布。
+
+测试与构建逻辑只维护一份；只有 `release.yml` 的发布 job 具有 `contents: write` 权限。
 
 1. 创建并发布 Release，tag 使用 `v1.4.2`、`v1.4.2-14200` 或 `v1.1.5.2-11520` 这类格式：以 `v` 开头，三至四段数字，可附加 `-数字` 构建号。
 2. 测试、vet 和 race 检测通过后构建四种 Linux 架构。Release tag 去掉 `v` 后完整注入 `main.gitversion`，例如 `v1.4.2-14200` 对应 `AutoInstall-1.4.2-14200`。
