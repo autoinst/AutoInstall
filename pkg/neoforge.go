@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/autoinst/AutoInstall/core"
@@ -11,27 +12,10 @@ import (
 
 func NeoForgeB(config core.InstConfig, simpfun bool, mise bool) error {
 	core.ApplyConfigDefaults(&config)
-	if config.Version == "latest" {
-		latestVersion, err := FetchLatestNeoForgeVersion(config.MaxRetries)
-		if err != nil {
-			return fmt.Errorf("获取最新版本失败: %w", err)
-		}
-		config.LoaderVersion = latestVersion
-
-		parts := strings.Split(latestVersion, ".")
-		if len(parts) >= 3 {
-			config.Version = fmt.Sprintf("1.%s.%s", parts[0], parts[1])
-		} else {
-			return fmt.Errorf("最新版本号格式不正确: %s", latestVersion)
-		}
-	}
-
-	if config.LoaderVersion == "latest" {
-		latestMatchingVersion, err := FetchLatestMatchingNeoForgeVersion(config.Version, config.MaxRetries)
-		if err != nil {
-			return fmt.Errorf("获取对应版本最新加载器版本失败: %w", err)
-		}
-		config.LoaderVersion = latestMatchingVersion
+	var err error
+	config, err = resolveNeoForgeTarget(config, FetchLatestNeoForgeVersion, FetchLatestMatchingNeoForgeVersion)
+	if err != nil {
+		return err
 	}
 
 	officialInstallerURL := fmt.Sprintf(
@@ -46,24 +30,61 @@ func NeoForgeB(config core.InstConfig, simpfun bool, mise bool) error {
 	}
 	core.Log("neoforge 安装器下载完成:", installerPath)
 
-	versionInfo, err := core.ExtractVersionJson(installerPath)
+	return installForgeFamilyServer(config, installerPath, simpfun, mise)
+}
+
+func neoForgeMinecraftVersion(loader string) (string, error) {
+	parts := strings.Split(loader, ".")
+	if len(parts) < 3 {
+		return "", fmt.Errorf("无法识别 NeoForge 版本: %s", loader)
+	}
+	major, err := strconv.Atoi(parts[0])
 	if err != nil {
-		return fmt.Errorf("提取安装器元数据失败: %w", err)
+		return "", fmt.Errorf("无法识别 NeoForge 版本: %s", loader)
 	}
+	minor, err := strconv.Atoi(parts[1])
+	if err != nil || minor < 0 || major < 20 {
+		return "", fmt.Errorf("无法识别 NeoForge 版本: %s", loader)
+	}
+	if major >= 26 {
+		return fmt.Sprintf("%d.%d", major, minor), nil
+	}
+	if minor == 0 {
+		return fmt.Sprintf("1.%d", major), nil
+	}
+	return fmt.Sprintf("1.%d.%d", major, minor), nil
+}
 
-	librariesDir := "./libraries"
-	if err := DownloadLibrariesAndServerJar(versionInfo, config.Version, config.Loader, librariesDir, config.MaxConnections, config.Download, config.MaxRetries); err != nil {
-		return err
+func resolveNeoForgeTarget(config core.InstConfig, latest func(int) (string, error), matching func(string, int) (string, error)) (core.InstConfig, error) {
+	if config.Version == "latest" {
+		loader, err := latest(config.MaxRetries)
+		if err != nil {
+			return config, fmt.Errorf("获取最新 NeoForge 版本失败: %w", err)
+		}
+		mc, err := neoForgeMinecraftVersion(loader)
+		if err != nil {
+			return config, err
+		}
+		config.Version = mc
+		if config.LoaderVersion == "latest" {
+			config.LoaderVersion = loader
+		}
 	}
-
-	core.Log("库文件和服务端下载完成")
-	if err := core.RunInstallerWithFallback(installerPath, config.Loader, config.Version, config.LoaderVersion, config.Download, simpfun, mise, config.MaxRetries, versionInfo.InstallFilePath); err != nil {
-		return fmt.Errorf("运行安装器失败: %w", err)
+	if config.LoaderVersion == "latest" {
+		loader, err := matching(config.Version, config.MaxRetries)
+		if err != nil {
+			return config, fmt.Errorf("获取对应版本最新 NeoForge 加载器失败: %w", err)
+		}
+		config.LoaderVersion = loader
 	}
-	if err := core.RunScript(config.Version, config.Loader, config.LoaderVersion, simpfun, mise, config.Argsment, versionInfo.InstallFilePath); err != nil {
-		return fmt.Errorf("生成启动脚本失败: %w", err)
+	mc, err := neoForgeMinecraftVersion(config.LoaderVersion)
+	if err != nil {
+		return config, err
 	}
-	return nil
+	if mc != config.Version {
+		return config, fmt.Errorf("NeoForge %s 不支持 Minecraft %s，保留固定版本且拒绝安装", config.LoaderVersion, config.Version)
+	}
+	return config, nil
 }
 
 func FetchLatestNeoForgeVersion(maxRetries int) (string, error) {
@@ -84,11 +105,10 @@ func FetchLatestMatchingNeoForgeVersion(mcVersion string, maxRetries int) (strin
 		return "", err
 	}
 
-	targetPrefix := strings.TrimPrefix(mcVersion, "1.") + "."
-
 	var matchedVersions []string
 	for _, v := range result.Versions {
-		if strings.HasPrefix(v, targetPrefix) {
+		mc, err := neoForgeMinecraftVersion(v)
+		if err == nil && mc == mcVersion {
 			matchedVersions = append(matchedVersions, v)
 		}
 	}

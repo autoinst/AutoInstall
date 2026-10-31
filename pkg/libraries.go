@@ -1,6 +1,7 @@
 package pkg
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -9,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/autoinst/AutoInstall/core"
+	"github.com/autoinst/AutoInstall/internal/workspace"
 )
 
 func DownloadLibrariesAndServerJar(versionInfo core.VersionInfo, version, loader, librariesDir string, maxConnections int, downloadapi string, maxRetries int) error {
@@ -40,6 +42,14 @@ func DownloadLibrariesAndServerJar(versionInfo core.VersionInfo, version, loader
 }
 
 func DownloadLibraries(versionInfo core.VersionInfo, librariesDir string, maxConnections int, downloadapi string, maxRetries int) error {
+	// Classification is local to this prefetch pass; do not mutate the caller's slice.
+	versionInfo.Libraries = append([]core.Library(nil), versionInfo.Libraries...)
+	if err := core.AnalyzeServerMetadata(&versionInfo); err != nil {
+		return fmt.Errorf("分析服务端库元数据失败: %w", err)
+	}
+	for _, warning := range versionInfo.MetadataWarnings {
+		core.Logf("警告: %s\n", warning)
+	}
 	if err := os.MkdirAll(librariesDir, os.ModePerm); err != nil {
 		return fmt.Errorf("无法创建目录: %v", err)
 	}
@@ -52,18 +62,37 @@ func DownloadLibraries(versionInfo core.VersionInfo, librariesDir string, maxCon
 	errChan := make(chan error, len(versionInfo.Libraries))
 	var wg sync.WaitGroup
 
+	type libraryTask struct {
+		lib             core.Library
+		url, path, sha1 string
+	}
+	tasks := make([]libraryTask, 0, len(versionInfo.Libraries))
+	seen := make(map[string]int)
 	for _, lib := range versionInfo.Libraries {
+		if lib.Kind != core.LibraryRemote {
+			core.Logf("跳过库预下载 %s (%s): %s\n", lib.Name, lib.Kind, lib.Reason)
+			continue
+		}
 		officialURL, artifactPath, sha1 := resolveLibraryArtifact(lib)
-		if officialURL == "" {
-			core.Logf("跳过库文件 %s: 未提供下载 URL\n", lib.Name)
+		if officialURL == "" || artifactPath == "" {
+			return fmt.Errorf("必需远程库 %s 缺少有效 URL 或路径", lib.Name)
+		}
+		if index, exists := seen[artifactPath]; exists {
+			previous := &tasks[index]
+			if previous.sha1 != "" && sha1 != "" && !strings.EqualFold(previous.sha1, sha1) {
+				return fmt.Errorf("库路径 %s 的 SHA1 冲突", artifactPath)
+			}
+			if previous.sha1 == "" {
+				previous.sha1 = sha1
+			}
 			continue
 		}
-
+		seen[artifactPath] = len(tasks)
+		tasks = append(tasks, libraryTask{lib, officialURL, artifactPath, sha1})
+	}
+	for _, task := range tasks {
+		lib, officialURL, artifactPath, sha1 := task.lib, task.url, task.path, task.sha1
 		currentURL, fallbackURL := downloadURLPair(officialURL, downloadapi)
-		if currentURL == "" {
-			core.Logf("警告: 处理后 URL 仍为空，跳过库 %s\n", lib.Name)
-			continue
-		}
 		filePath := filepath.Join(librariesDir, artifactPath)
 
 		wg.Add(1)
@@ -72,29 +101,44 @@ func DownloadLibraries(versionInfo core.VersionInfo, librariesDir string, maxCon
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
-			if _, err := os.Stat(filePath); err == nil {
-				if err := core.VerifyFileHash(filePath, "sha1", sha1); err == nil {
+			if _, err := workspace.SafeJoin(librariesDir, artifactPath); err != nil {
+				errChan <- err
+				return
+			}
+			if info, err := os.Stat(filePath); err == nil {
+				if !info.Mode().IsRegular() {
+					errChan <- fmt.Errorf("库目标不是普通文件: %s", filePath)
+					return
+				}
+				if info.Size() > 0 && core.VerifyFileHash(filePath, "sha1", sha1) == nil {
 					core.Logf("已存在且校验通过: %s\n", filePath)
 					return
 				}
-				core.Logf("文件 %s 校验失败 (或无法校验)，重新下载...\n", filePath)
-				if err := os.Remove(filePath); err != nil && !os.IsNotExist(err) {
-					errChan <- fmt.Errorf("删除校验失败文件 %s 失败: %w", filePath, err)
-					return
-				}
-			}
-
-			if err := os.MkdirAll(filepath.Dir(filePath), os.ModePerm); err != nil {
-				errChan <- fmt.Errorf("无法创建目录: %w", err)
+			} else if !os.IsNotExist(err) {
+				errChan <- err
 				return
 			}
-			if err := core.DownloadFileWithFallback(currentURL, fallbackURL, filePath, maxRetries); err != nil {
+			dir, err := os.MkdirTemp(librariesDir, ".download-")
+			if err != nil {
+				errChan <- err
+				return
+			}
+			defer os.RemoveAll(dir)
+			temp := filepath.Join(dir, "payload")
+			if _, err = core.DownloadCandidates(context.Background(), core.HTTPClient, []string{currentURL, fallbackURL}, temp, maxRetries, map[string]string{"sha1": sha1}); err != nil {
 				errChan <- fmt.Errorf("下载库 %s 失败: %w", lib.Name, err)
 				return
 			}
-			if err := core.VerifyFileHash(filePath, "sha1", sha1); err != nil {
-				_ = os.Remove(filePath)
-				errChan <- fmt.Errorf("下载库 %s 后校验失败: %w", lib.Name, err)
+			if err = os.MkdirAll(filepath.Dir(filePath), 0755); err == nil {
+				_, err = workspace.SafeJoin(librariesDir, artifactPath)
+			}
+			if err != nil {
+				errChan <- err
+				return
+			}
+			// Replace a corrupt cache entry only after a verified replacement exists.
+			if err = os.Rename(temp, filePath); err != nil {
+				errChan <- err
 				return
 			}
 			core.Log("下载完成:", filePath)
@@ -114,29 +158,27 @@ func DownloadLibraries(versionInfo core.VersionInfo, librariesDir string, maxCon
 }
 
 func mavenRelPathFromNameWithFile(name, fileName string) string {
-	if strings.TrimSpace(fileName) == "" {
-		return mavenRelPathFromName(name)
-	}
-	parts := strings.Split(name, ":")
-	if len(parts) < 3 {
-		return fileName
-	}
-	groupPath := strings.ReplaceAll(parts[0], ".", "/")
-	return filepath.ToSlash(filepath.Join(groupPath, parts[1], parts[2], fileName))
+	artifact, _ := core.LibraryArtifactPath(core.Library{Name: name, FilePath: fileName})
+	return artifact
 }
 
 func resolveLibraryArtifact(lib core.Library) (url, path, sha1 string) {
 	url = strings.TrimSpace(lib.Downloads.Artifact.URL)
-	path = strings.TrimSpace(lib.Downloads.Artifact.Path)
+	path, _ = core.LibraryArtifactPath(lib)
 	sha1 = strings.TrimSpace(lib.Downloads.Artifact.SHA1)
 	if sha1 == "" && len(lib.Checksums) > 0 {
 		sha1 = strings.TrimSpace(lib.Checksums[0])
 	}
 
-	if path == "" {
-		path = mavenRelPathFromNameWithFile(lib.Name, lib.FilePath)
+	if lib.Kind != "" && lib.Kind != core.LibraryRemote {
+		return "", path, sha1
 	}
-	if url == "" {
+	// Only legacy Maven entries may synthesize a URL. A modern empty or absent
+	// artifact URL is an installer responsibility, not a libraries.minecraft.net URL.
+	if url == "" && (lib.DownloadsPresent || lib.ArtifactPresent || lib.ArtifactURLPresent || lib.Downloads.Artifact.Path != "" || lib.Downloads.Artifact.SHA1 != "") {
+		return "", path, sha1
+	}
+	if url == "" && path != "" {
 		base := strings.TrimSpace(lib.URL)
 		if base == "" {
 			base = "https://libraries.minecraft.net/"

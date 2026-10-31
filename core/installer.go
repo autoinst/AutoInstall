@@ -1,85 +1,36 @@
 package core
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
-	"runtime"
+
+	runtimeenv "github.com/autoinst/AutoInstall/internal/runtime"
 	"strconv"
 	"strings"
 )
 
-func installerJava(simpfun bool, mise bool) string {
-	if simpfun {
-		if mise {
-			_ = exec.Command("mise", "use", "-g", "java@zulu-8.86.0.25").Run()
-			return "java"
+// installerCommandRunner is a command execution seam; tests never launch Java.
+var installerCommandRunner = func(cmd *exec.Cmd) error { return cmd.Run() }
+
+func installerContext(contexts []context.Context) context.Context {
+	for _, ctx := range contexts {
+		if ctx != nil {
+			return ctx
 		}
-		return "/usr/bin/jdk/jdk1.8.0_361/bin/java"
 	}
-	return "java"
+	return context.Background()
 }
 
-func runtimeJava(mc string) int {
-	mc = strings.Split(mc, "-")[0]
-	lowerMC := strings.ToLower(mc)
+func javaHomeExecutable() string { return runtimeenv.JavaHomeExecutable() }
 
-	if strings.Contains(lowerMC, "snapshot") {
-		return 25
-	}
-
-	if match := regexp.MustCompile(`^(\d{2})w(\d{2})([a-z]?)$`).FindStringSubmatch(lowerMC); len(match) == 4 {
-		week, _ := strconv.Atoi(match[1])
-		if week >= 26 {
-			return 25
-		}
-		return 21
-	}
-
-	if strings.Contains(lowerMC, "w") {
-		return 21
-	}
-
-	parts := strings.Split(mc, ".")
-	if len(parts) >= 2 && parts[0] == "1" {
-		minor, _ := strconv.Atoi(parts[1])
-		patch := 0
-		if len(parts) >= 3 {
-			patch, _ = strconv.Atoi(parts[2])
-		}
-
-		switch minor {
-		case 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16:
-			return 8
-		case 17:
-			return 16
-		case 18, 19:
-			return 17
-		case 20:
-			if patch <= 4 {
-				return 17
-			}
-			return 21
-		case 21:
-			if patch <= 11 {
-				return 21
-			}
-			return 25
-		default:
-			return 25
-		}
-	}
-
-	if major, err := strconv.Atoi(parts[0]); err == nil {
-		if major >= 26 {
-			return 25
-		}
-	}
-
-	return 21
+func installerJava(simpfun bool, mise bool, versions ...string) string {
+	return runtimeenv.InstallerJava(simpfun, mise, versions...)
 }
+
+func runtimeJava(mc string) int { return runtimeenv.JavaMajor(mc) }
 
 func RunInstaller(
 	installerPath string,
@@ -89,44 +40,53 @@ func RunInstaller(
 	Download string,
 	simpfun bool,
 	mise bool,
+	contexts ...context.Context,
 ) error {
-
-	javaPath := installerJava(simpfun, mise)
+	ctx := installerContext(contexts)
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	javaPath := installerJava(simpfun, mise, version)
 
 	var cmd *exec.Cmd
 
 	if Download == "bmclapi" {
 		switch loader {
 		case "forge", "neoforge":
-			cmd = exec.Command(
-				javaPath, "-jar", installerPath,
+			cmd = exec.CommandContext(
+				ctx, javaPath, "-jar", installerPath,
 				"--installServer",
 				"--mirror", "https://bmclapi2.bangbang93.com/maven/",
 			)
 		case "fabric":
-			cmd = exec.Command(
-				javaPath, "-jar", installerPath, "server",
+			cmd = exec.CommandContext(
+				ctx, javaPath, "-jar", installerPath, "server",
 				"-mcversion", version,
 				"-loader", loaderVersion,
 				"-mavenurl", "https://bmclapi2.bangbang93.com/maven/",
 				"-metaurl", "https://bmclapi2.bangbang93.com/fabric-meta/",
 			)
 		default:
-			cmd = exec.Command(javaPath, "-jar", installerPath)
+			cmd = exec.CommandContext(ctx, javaPath, "-jar", installerPath)
 		}
 	} else {
 		switch loader {
 		case "forge", "neoforge":
-			cmd = exec.Command(javaPath, "-jar", installerPath, "--installServer")
+			cmd = exec.CommandContext(ctx, javaPath, "-jar", installerPath, "--installServer")
 		case "fabric":
-			cmd = exec.Command(
-				javaPath, "-jar", installerPath, "server",
+			cmd = exec.CommandContext(
+				ctx, javaPath, "-jar", installerPath, "server",
 				"-mcversion", version,
 				"-loader", loaderVersion,
 			)
 		default:
-			cmd = exec.Command(javaPath, "-jar", installerPath)
+			cmd = exec.CommandContext(ctx, javaPath, "-jar", installerPath)
 		}
+	}
+
+	if simpfun && mise {
+		// Scope the selected installer JDK to this process, never mise use -g.
+		cmd = exec.CommandContext(ctx, "mise", append([]string{"exec", fmt.Sprintf("java@%d", runtimeJava(version)), "--"}, cmd.Args...)...)
 	}
 
 	stdoutWriter := newStreamLogWriter("installer.stdout", os.Stdout)
@@ -136,12 +96,12 @@ func RunInstaller(
 
 	Logf("运行安装器命令: %s\n", strings.Join(cmd.Args, " "))
 
-	if err := cmd.Start(); err != nil {
-		return err
+	defer stdoutWriter.Flush()
+	defer stderrWriter.Flush()
+	err := installerCommandRunner(cmd)
+	if ctx.Err() != nil {
+		return ctx.Err()
 	}
-	err := cmd.Wait()
-	stdoutWriter.Flush()
-	stderrWriter.Flush()
 	return err
 }
 
@@ -155,7 +115,12 @@ func RunInstallerWithFallback(
 	mise bool,
 	retries int,
 	installFilePath string,
+	contexts ...context.Context,
 ) error {
+	ctx := installerContext(contexts)
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	retries = NormalizeRetries(retries)
 	currentSource := downloadSource
 	if currentSource == "" {
@@ -167,13 +132,16 @@ func RunInstallerWithFallback(
 		fallbackSource = "official"
 	}
 
-	currentErr := runInstallerRetry(installerPath, loader, version, loaderVersion, currentSource, simpfun, mise, retries, installFilePath)
+	currentErr := runInstallerRetry(installerPath, loader, version, loaderVersion, currentSource, simpfun, mise, retries, installFilePath, ctx)
 	if currentErr == nil {
 		return nil
 	}
 
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	Log("当前源运行安装器失败，切换备用源")
-	fallbackErr := runInstallerRetry(installerPath, loader, version, loaderVersion, fallbackSource, simpfun, mise, retries, installFilePath)
+	fallbackErr := runInstallerRetry(installerPath, loader, version, loaderVersion, fallbackSource, simpfun, mise, retries, installFilePath, ctx)
 	if fallbackErr == nil {
 		return nil
 	}
@@ -190,66 +158,79 @@ func runInstallerRetry(
 	mise bool,
 	retries int,
 	installFilePath string,
+	contexts ...context.Context,
 ) error {
+	ctx := installerContext(contexts)
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	retries = NormalizeRetries(retries)
 	var lastErr error
 	for i := 0; i < retries; i++ {
-		if err := RunInstaller(installerPath, loader, version, loaderVersion, downloadSource, simpfun, mise); err != nil {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if err := RunInstaller(installerPath, loader, version, loaderVersion, downloadSource, simpfun, mise, ctx); err != nil {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
 			lastErr = err
 			Logf("运行安装器失败 %d/%d: %v\n", i+1, retries, err)
 			continue
 		}
-		// if err := ValidateInstalledServerArtifacts(version, loader, loaderVersion, installFilePath); err != nil {
-		// 	lastErr = fmt.Errorf("安装器退出成功但产物校验失败: %w", err)
-		// 	Logf("运行安装器失败 %d/%d: %v\n", i+1, retries, lastErr)
-		// 	continue
-		// }
-		return nil
+		if err := validateInstallerArtifacts(installerPath, version, loader, loaderVersion, installFilePath); err != nil {
+			lastErr = fmt.Errorf("安装器退出成功但产物校验失败: %w", err)
+			Logf("运行安装器失败 %d/%d: %v\n", i+1, retries, lastErr)
+			continue
+		}
+		return ctx.Err()
 	}
 	return fmt.Errorf("多次运行安装器失败 (共 %d 次): %w", retries, lastErr)
 }
 
-func FindJava() (string, bool, bool) {
-	simpfun := false
-	mise := false
-
-	if runtime.GOOS == "linux" {
-		if _, err := os.Stat("/home/container/.aio"); err == nil {
-			simpfun = true
-		}
-		if _, err := os.Stat("/usr/bin/jdk/jdk1.8.0_361/bin/java"); err == nil {
-			simpfun = true
-		}
+func validateInstallerArtifacts(installerPath, version, loader, loaderVersion, installFilePath string) error {
+	if err := ValidateInstalledServerArtifacts(version, loader, loaderVersion, installFilePath); err != nil {
+		return err
 	}
-
-	if simpfun {
-		if err := exec.Command("mise", "-v").Run(); err == nil {
-			mise = true
+	if loader == "forge" || loader == "neoforge" {
+		info, err := ExtractVersionJson(installerPath)
+		if err != nil {
+			return fmt.Errorf("读取安装器产物元数据失败: %w", err)
+		}
+		if err := VerifyRequiredServerArtifacts(".", info); err != nil {
+			return err
 		}
 	}
-
-	if javaHome := os.Getenv("JAVA_HOME"); javaHome != "" {
-		java := filepath.Join(javaHome, "bin", "java")
-		if _, err := os.Stat(java); err == nil {
-			return java, simpfun, mise
-		}
-	}
-
-	if err := exec.Command("java", "-version").Run(); err == nil {
-		return "java", simpfun, mise
-	}
-
-	return "", simpfun, mise
+	return nil
 }
 
-func ValidateInstalledServerArtifacts(version, loader, loaderVersion, installFilePath string) error {
-	if loader != "forge" && loader != "neoforge" {
-		return nil
-	}
+func FindJava() (string, bool, bool) { return runtimeenv.FindJava(context.Background()) }
 
-	artifactPath, err := installedServerArtifactPath(version, loader, loaderVersion, installFilePath)
+func FindJavaContext(ctx context.Context) (string, bool, bool) { return runtimeenv.FindJava(ctx) }
+
+func ValidateInstalledServerArtifacts(version, loader, loaderVersion, installFilePath string) error {
+	var artifactPath string
+	var err error
+	switch loader {
+	case "forge", "neoforge":
+		artifactPath, err = installedServerArtifactPath(version, loader, loaderVersion, installFilePath)
+	case "fabric":
+		if err := validateNonemptyArtifact("server.jar"); err != nil {
+			return err
+		}
+		artifactPath = "fabric-server-launch.jar"
+	case "vanilla":
+		artifactPath = "server.jar"
+	default:
+		return fmt.Errorf("无法为加载器 %s 校验安装产物", loader)
+	}
 	if err != nil {
 		return err
 	}
+	return validateNonemptyArtifact(artifactPath)
+}
+
+func validateNonemptyArtifact(artifactPath string) error {
 	info, err := os.Stat(artifactPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -295,6 +276,9 @@ func cleanRelativeArtifactPath(path string) (string, error) {
 	return path, nil
 }
 
+// RunScript validates the loader's launch artifacts before replacing run.sh.
+// Forge/NeoForge callers should also pass their extracted metadata so processor
+// outputs and available hashes are checked, not only the launch args file.
 func RunScript(
 	Version string,
 	Loader string,
@@ -303,10 +287,16 @@ func RunScript(
 	mise bool,
 	argsment string,
 	installFilePath string,
+	metadata ...VersionInfo,
 ) error {
-	// if err := ValidateInstalledServerArtifacts(Version, Loader, LoaderVersion, installFilePath); err != nil {
-	// 	return err
-	// }
+	if err := ValidateInstalledServerArtifacts(Version, Loader, LoaderVersion, installFilePath); err != nil {
+		return err
+	}
+	for _, info := range metadata {
+		if err := VerifyRequiredServerArtifacts(".", info); err != nil {
+			return err
+		}
+	}
 
 	mem, err := strconv.Atoi(os.Getenv("SERVER_MEMORY"))
 	if err != nil || mem <= 1500 {
@@ -316,23 +306,10 @@ func RunScript(
 	argsment = strings.ReplaceAll(argsment, "{maxmen}", strconv.Itoa(maxmem))
 
 	javaMajor := runtimeJava(Version)
-	var javaPath string
-
-	if simpfun {
-		switch javaMajor {
-		case 8:
-			javaPath = "/usr/bin/jdk/jdk1.8.0_361/bin/java"
-		case 16:
-			javaPath = "/usr/bin/jdk/jdk-16/bin/java"
-		case 17:
-			javaPath = "/usr/bin/jdk/jdk-17.0.6/bin/java"
-		case 21:
-			javaPath = "/usr/bin/jdk/jdk-21.0.2/bin/java"
-		default:
-			javaPath = "/usr/bin/jdk/jdk-25.0.2/bin/java"
-		}
-	} else {
-		javaPath = "java"
+	javaPath := installerJava(simpfun, false, Version)
+	javaCommand := shellQuote(filepath.ToSlash(javaPath))
+	if simpfun && mise {
+		javaCommand = fmt.Sprintf("mise exec java@%d -- java", javaMajor)
 	}
 
 	var script string
@@ -345,31 +322,31 @@ func RunScript(
 				return err
 			}
 			script = fmt.Sprintf(
-				"%s %s -jar %s",
-				javaPath, argsment, filepath.ToSlash(artifactPath),
+				"%s %s -jar %s \"$@\"",
+				javaCommand, argsment, shellQuote(filepath.ToSlash(artifactPath)),
 			)
 		} else {
 			script = fmt.Sprintf(
-				"%s %s @libraries/net/minecraftforge/forge/%s-%s/unix_args.txt \"$@\"",
-				javaPath, argsment, Version, LoaderVersion,
+				"%s %s %s \"$@\"",
+				javaCommand, argsment, shellQuote("@libraries/net/minecraftforge/forge/"+Version+"-"+LoaderVersion+"/unix_args.txt"),
 			)
 		}
 
 	case "neoforge":
 		script = fmt.Sprintf(
-			"%s %s @libraries/net/neoforged/neoforge/%s/unix_args.txt \"$@\"",
-			javaPath, argsment, LoaderVersion,
+			"%s %s %s \"$@\"",
+			javaCommand, argsment, shellQuote("@libraries/net/neoforged/neoforge/"+LoaderVersion+"/unix_args.txt"),
 		)
 
 	case "fabric":
 		script = fmt.Sprintf(
-			"%s %s -jar fabric-server-launch.jar",
-			javaPath, argsment,
+			"%s %s -jar fabric-server-launch.jar \"$@\"",
+			javaCommand, argsment,
 		)
 	case "vanilla":
 		script = fmt.Sprintf(
-			"%s %s -jar server.jar",
-			javaPath, argsment,
+			"%s %s -jar server.jar \"$@\"",
+			javaCommand, argsment,
 		)
 	}
 
@@ -377,13 +354,36 @@ func RunScript(
 		return fmt.Errorf("无法为加载器 %s 生成启动脚本", Loader)
 	}
 	script = "#!/bin/bash\n" + script + "\n"
-	tmp := "run.sh.tmp"
-	if err := os.WriteFile(tmp, []byte(script), 0777); err != nil {
+	f, err := os.CreateTemp(".", ".autoinst-run-*.tmp")
+	if err != nil {
 		return err
 	}
-	if err := os.Rename(tmp, "run.sh"); err != nil {
-		_ = os.Remove(tmp)
+	tmp := f.Name()
+	defer os.Remove(tmp)
+	if _, err := f.WriteString(script); err != nil {
+		f.Close()
 		return err
 	}
-	return nil
+	if err := f.Chmod(0755); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	// Recheck before replacing our script. An official installer may already
+	// have written its own run.sh; failed validation never overwrites it here.
+	if err := ValidateInstalledServerArtifacts(Version, Loader, LoaderVersion, installFilePath); err != nil {
+		return err
+	}
+	for _, info := range metadata {
+		if err := VerifyRequiredServerArtifacts(".", info); err != nil {
+			return err
+		}
+	}
+	return os.Rename(tmp, "run.sh")
+}
+
+func shellQuote(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'"
 }

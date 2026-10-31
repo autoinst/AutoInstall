@@ -2,21 +2,25 @@ package core
 
 import (
 	"archive/zip"
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/autoinst/AutoInstall/internal/download"
 )
 
-const DefaultMaxRetries = 3
+const DefaultMaxRetries = download.DefaultRetries
 
 type InstConfig struct {
-	Version        string `json:"version"`
-	Loader         string `json:"loader"`
-	LoaderVersion  string `json:"loaderVersion"`
-	Download       string `json:"download"`
-	MaxConnections int    `json:"maxconnections"`
-	MaxRetries     int    `json:"maxretries"`
-	Argsment       string `json:"argsment"`
+	Context        context.Context `json:"-"`
+	Version        string          `json:"version"`
+	Loader         string          `json:"loader"`
+	LoaderVersion  string          `json:"loaderVersion"`
+	Download       string          `json:"download"`
+	MaxConnections int             `json:"maxconnections"`
+	MaxRetries     int             `json:"maxretries"`
+	Argsment       string          `json:"argsment"`
 }
 
 type Config struct {
@@ -24,11 +28,20 @@ type Config struct {
 }
 
 type Library struct {
-	Name      string   `json:"name"`
-	URL       string   `json:"url"`
-	FilePath  string   `json:"filePath"`
-	Checksums []string `json:"checksums"`
-	Downloads struct {
+	// Presence flags distinguish legacy Maven entries from modern entries with no remote artifact.
+	DownloadsPresent   bool                 `json:"-"`
+	ArtifactPresent    bool                 `json:"-"`
+	ArtifactURLPresent bool                 `json:"-"`
+	Sources            []string             `json:"-"`
+	Declarations       []LibraryDeclaration `json:"-"`
+	Kind               LibraryKind          `json:"-"`
+	Reason             string               `json:"-"`
+	EmbeddedPath       string               `json:"-"`
+	Name               string               `json:"name"`
+	URL                string               `json:"url"`
+	FilePath           string               `json:"filePath"`
+	Checksums          []string             `json:"checksums"`
+	Downloads          struct {
 		Artifact struct {
 			URL  string `json:"url"`
 			Path string `json:"path"`
@@ -38,27 +51,31 @@ type Library struct {
 }
 
 type VersionInfo struct {
-	Libraries       []Library `json:"libraries"`
-	ServerJarPath   string    `json:"serverJarPath"`
-	InstallFilePath string    `json:"installFilePath"`
+	MinecraftVersion        string                   `json:"inheritsFrom"`
+	Libraries               []Library                `json:"libraries"`
+	ServerJarPath           string                   `json:"serverJarPath"`
+	InstallFilePath         string                   `json:"installFilePath"`
+	Data                    map[string]SideValue     `json:"data"`
+	Processors              []InstallProcessor       `json:"processors"`
+	EmbeddedFiles           []string                 `json:"-"`
+	RequiredServerArtifacts []RequiredServerArtifact `json:"-"`
+	MetadataWarnings        []string                 `json:"-"`
 }
 
 type installProfile struct {
-	Libraries   []Library   `json:"libraries"`
-	VersionInfo VersionInfo `json:"versionInfo"`
-	Install     struct {
+	MinecraftVersion string      `json:"minecraft"`
+	Libraries        []Library   `json:"libraries"`
+	VersionInfo      VersionInfo `json:"versionInfo"`
+	Install          struct {
 		Path     string `json:"path"`
 		FilePath string `json:"filePath"`
 	} `json:"install"`
-	ServerJarPath string `json:"serverJarPath"`
+	ServerJarPath string               `json:"serverJarPath"`
+	Data          map[string]SideValue `json:"data"`
+	Processors    []InstallProcessor   `json:"processors"`
 }
 
-func NormalizeRetries(retries int) int {
-	if retries <= 0 {
-		return DefaultMaxRetries
-	}
-	return retries
-}
+func NormalizeRetries(retries int) int { return download.NormalizeRetries(retries) }
 
 func ApplyConfigDefaults(config *InstConfig) {
 	config.MaxRetries = NormalizeRetries(config.MaxRetries)
@@ -90,6 +107,14 @@ func ExtractVersionJson(jarFilePath string) (VersionInfo, error) {
 	if !found {
 		return merged, fmt.Errorf("没有找到 version.json 或 install_profile.json")
 	}
+	for _, f := range r.File {
+		if !f.FileInfo().IsDir() {
+			merged.EmbeddedFiles = append(merged.EmbeddedFiles, f.Name)
+		}
+	}
+	if err := AnalyzeServerMetadata(&merged); err != nil {
+		return merged, err
+	}
 	return merged, nil
 }
 
@@ -115,6 +140,15 @@ func decodeVersionInfoFromZipFile(files []*zip.File, name string) (VersionInfo, 
 		} else if err := json.NewDecoder(rc).Decode(&info); err != nil {
 			return VersionInfo{}, true, fmt.Errorf("无法解析 %s: %w", name, err)
 		}
+		for i := range info.Libraries {
+			lib := &info.Libraries[i]
+			source := name
+			if len(lib.Sources) > 0 {
+				source = lib.Sources[0]
+			}
+			lib.Declarations = append(lib.Declarations, LibraryDeclaration{Source: source, DownloadsPresent: lib.DownloadsPresent, ArtifactPresent: lib.ArtifactPresent, ArtifactURLPresent: lib.ArtifactURLPresent, ArtifactURL: lib.Downloads.Artifact.URL})
+			lib.Sources = append(lib.Sources, name)
+		}
 		return info, true, nil
 	}
 	return VersionInfo{}, false, nil
@@ -122,9 +156,21 @@ func decodeVersionInfoFromZipFile(files []*zip.File, name string) (VersionInfo, 
 
 func (profile installProfile) toVersionInfo() VersionInfo {
 	info := profile.VersionInfo
-	if len(info.Libraries) == 0 {
-		info.Libraries = profile.Libraries
+	if profile.MinecraftVersion != "" {
+		info.MinecraftVersion = profile.MinecraftVersion
 	}
+	// Both lists may carry useful entries; merging later also enforces SHA1 conflicts.
+	for i := range info.Libraries {
+		info.Libraries[i].Sources = append(info.Libraries[i].Sources, "install_profile.json/versionInfo")
+	}
+	info.Libraries = append(info.Libraries, profile.Libraries...)
+	if info.Data == nil {
+		info.Data = make(map[string]SideValue)
+	}
+	for key, value := range profile.Data {
+		info.Data[key] = value
+	}
+	info.Processors = append(info.Processors, profile.Processors...)
 	if strings.TrimSpace(info.ServerJarPath) == "" {
 		info.ServerJarPath = profile.ServerJarPath
 	}
@@ -142,6 +188,20 @@ func (profile installProfile) toVersionInfo() VersionInfo {
 }
 
 func mergeVersionInfo(dst *VersionInfo, src VersionInfo) error {
+	if src.MinecraftVersion != "" {
+		if dst.MinecraftVersion != "" && src.MinecraftVersion != dst.MinecraftVersion {
+			return fmt.Errorf("安装器 Minecraft 版本元数据冲突: %s 与 %s", dst.MinecraftVersion, src.MinecraftVersion)
+		}
+		dst.MinecraftVersion = src.MinecraftVersion
+	}
+	if dst.Data == nil {
+		dst.Data = make(map[string]SideValue)
+	}
+	for key, value := range src.Data {
+		dst.Data[key] = value
+	}
+	dst.Processors = append(dst.Processors, src.Processors...)
+	dst.EmbeddedFiles = append(dst.EmbeddedFiles, src.EmbeddedFiles...)
 	if strings.TrimSpace(src.ServerJarPath) != "" {
 		dst.ServerJarPath = src.ServerJarPath
 	}
@@ -179,7 +239,7 @@ func mergeVersionInfo(dst *VersionInfo, src VersionInfo) error {
 }
 
 func libraryKey(lib Library) string {
-	if path := strings.TrimSpace(lib.Downloads.Artifact.Path); path != "" {
+	if path, err := LibraryArtifactPath(lib); err == nil {
 		return path
 	}
 	if url := strings.TrimSpace(lib.Downloads.Artifact.URL); url != "" {
@@ -189,6 +249,11 @@ func libraryKey(lib Library) string {
 }
 
 func mergeLibrary(dst, src Library) Library {
+	dst.DownloadsPresent = dst.DownloadsPresent || src.DownloadsPresent
+	dst.ArtifactPresent = dst.ArtifactPresent || src.ArtifactPresent
+	dst.ArtifactURLPresent = dst.ArtifactURLPresent || src.ArtifactURLPresent
+	dst.Sources = append(dst.Sources, src.Sources...)
+	dst.Declarations = append(dst.Declarations, src.Declarations...)
 	if strings.TrimSpace(dst.Name) == "" {
 		dst.Name = src.Name
 	}

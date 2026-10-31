@@ -1,7 +1,7 @@
 
 dist/*
 .vscode
-app.*
-app
+/app.*
+/app
 .autoinst/logs
 .autoinst/cache

@@ -1,12 +1,22 @@
 package modcheck
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 type Config struct {
+	Context        context.Context
 	EnableModrinth bool
 	EnableMixin    bool
 	EnableHash     bool
 	Timeout        time.Duration
+	RubbishDir     string
+}
+
+type Detection struct {
+	Path    string
+	Reasons []string
 }
 
 var DefaultConfig = Config{

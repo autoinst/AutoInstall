@@ -9,9 +9,38 @@ import (
 	"strings"
 
 	"github.com/autoinst/AutoInstall/core"
+	"github.com/autoinst/AutoInstall/internal/download"
+	"github.com/autoinst/AutoInstall/internal/workspace"
 )
 
 func FilterInstalledMods(modsDir, bundleName string, cfg *Config) ([]string, error) {
+	detections, err := DetectInstalledMods(modsDir, cfg)
+	if err != nil || len(detections) == 0 {
+		return nil, err
+	}
+	if cfg != nil && cfg.Context != nil && cfg.Context.Err() != nil {
+		return nil, cfg.Context.Err()
+	}
+	rubbish := ".rubbish"
+	if cfg != nil && cfg.RubbishDir != "" {
+		rubbish = cfg.RubbishDir
+	}
+	paths := make([]string, 0, len(detections))
+	for _, detection := range detections {
+		paths = append(paths, detection.Path)
+	}
+	target, err := workspace.SafeJoin(rubbish, normalizeBundleName(bundleName))
+	if err != nil {
+		return nil, err
+	}
+	moved, err := moveMods(paths, target)
+	if err == nil {
+		core.Logf("已识别并移走 %d 个客户端模组\n", len(moved))
+	}
+	return moved, err
+}
+
+func DetectInstalledMods(modsDir string, cfg *Config) ([]Detection, error) {
 	config := DefaultConfig
 	if cfg != nil {
 		config = *cfg
@@ -27,7 +56,7 @@ func FilterInstalledMods(modsDir, bundleName string, cfg *Config) ([]string, err
 	}
 
 	core.Logf("开始检测客户端模组，共 %d 个文件\n", len(mods))
-	client := &http.Client{Timeout: config.Timeout}
+	client := download.WithContext(config.Context, &http.Client{Timeout: config.Timeout})
 
 	var detected []string
 	reasons := make(map[string][]string)
@@ -67,15 +96,11 @@ func FilterInstalledMods(modsDir, bundleName string, cfg *Config) ([]string, err
 	}
 
 	logDetectedMods(unique, reasons)
-
-	targetDir := filepath.Join(".rubbish", normalizeBundleName(bundleName))
-	moved, err := moveMods(unique, targetDir)
-	if err != nil {
-		return moved, err
+	detections := make([]Detection, 0, len(unique))
+	for _, path := range unique {
+		detections = append(detections, Detection{Path: path, Reasons: reasons[path]})
 	}
-
-	core.Logf("已识别并移走 %d 个客户端模组\n", len(moved))
-	return moved, nil
+	return detections, nil
 }
 
 func excludeProcessed(files []ModFile, processed map[string]struct{}) []ModFile {
@@ -141,8 +166,8 @@ func logDetectedMods(paths []string, reasons map[string][]string) {
 }
 
 func normalizeBundleName(bundleName string) string {
-	bundleName = strings.TrimSpace(bundleName)
-	if bundleName == "" {
+	bundleName = filepath.Base(strings.ReplaceAll(strings.TrimSpace(bundleName), "\\", "/"))
+	if bundleName == "" || bundleName == "." || bundleName == ".." || bundleName == "/" {
 		return "modpack"
 	}
 	return bundleName
@@ -157,7 +182,7 @@ func moveMods(paths []string, targetDir string) ([]string, error) {
 	var moveErrs []string
 	for _, sourcePath := range paths {
 		targetPath := filepath.Join(targetDir, filepath.Base(sourcePath))
-		if err := moveFile(sourcePath, targetPath); err != nil {
+		if err := moveMod(sourcePath, targetPath); err != nil {
 			moveErrs = append(moveErrs, fmt.Sprintf("%s: %v", filepath.Base(sourcePath), err))
 			continue
 		}
@@ -170,27 +195,62 @@ func moveMods(paths []string, targetDir string) ([]string, error) {
 	return moved, nil
 }
 
-func moveFile(sourcePath, targetPath string) error {
-	if err := os.Rename(sourcePath, targetPath); err == nil {
-		return nil
+func moveMod(sourcePath, targetPath string) error {
+	ext := filepath.Ext(targetPath)
+	stem := strings.TrimSuffix(targetPath, ext)
+	for index := 0; ; index++ {
+		candidate := targetPath
+		if index > 0 {
+			candidate = fmt.Sprintf("%s.%d%s", stem, index, ext)
+		}
+		err := moveFile(sourcePath, candidate)
+		if !os.IsExist(err) {
+			return err
+		}
+		info, err := os.Lstat(candidate)
+		if os.IsNotExist(err) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		if !info.Mode().IsRegular() {
+			continue
+		}
+		same, err := workspace.SameContent(sourcePath, candidate)
+		if err != nil {
+			return err
+		}
+		if same {
+			return os.Remove(sourcePath)
+		}
 	}
+}
 
+func moveFile(sourcePath, targetPath string) error {
 	src, err := os.Open(sourcePath)
 	if err != nil {
 		return err
 	}
 	defer src.Close()
-
-	dst, err := os.Create(targetPath)
+	info, err := src.Stat()
 	if err != nil {
 		return err
 	}
-	defer dst.Close()
-
-	if _, err := io.Copy(dst, src); err != nil {
+	dst, err := os.OpenFile(targetPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, info.Mode().Perm())
+	if err != nil {
 		return err
 	}
-	if err := dst.Close(); err != nil {
+	_, copyErr := io.Copy(dst, src)
+	closeErr := dst.Close()
+	if copyErr != nil || closeErr != nil {
+		_ = os.Remove(targetPath)
+		if copyErr != nil {
+			return copyErr
+		}
+		return closeErr
+	}
+	if err := src.Close(); err != nil {
 		return err
 	}
 	return os.Remove(sourcePath)

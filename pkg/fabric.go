@@ -13,12 +13,10 @@ import (
 	"sync"
 
 	"github.com/autoinst/AutoInstall/core"
+	"github.com/autoinst/AutoInstall/internal/workspace"
 )
 
-const (
-	defaultMavenBase = "https://repo1.maven.org/maven2/"
-	launchJarName    = "fabric-server-launch.jar"
-)
+const launchJarName = "fabric-server-launch.jar"
 
 var sigFilePattern = regexp.MustCompile(`(?i)^META-INF/[^/]+\.(SF|DSA|RSA|EC)$`)
 
@@ -39,24 +37,10 @@ type parsedLib struct {
 
 func FabricB(config core.InstConfig, simpfun bool, mise bool) error {
 	core.ApplyConfigDefaults(&config)
-	if config.Version == "latest" {
-		latestRelease, err := FetchLatestFabricMinecraftVersion(config.Download, config.MaxRetries)
-		if err != nil {
-			return fmt.Errorf("获取最新我的世界版本失败: %w", err)
-		}
-		config.Version = latestRelease
-		stableLoader, err := FetchLatestStableFabricLoaderVersion(config.Download, config.MaxRetries)
-		if err != nil {
-			return fmt.Errorf("获取最新 Fabric Loader 版本失败: %w", err)
-		}
-		config.LoaderVersion = stableLoader
-	}
-	if config.LoaderVersion == "latest" {
-		stableLoader, err := FetchLatestStableFabricLoaderVersion(config.Download, config.MaxRetries)
-		if err != nil {
-			return fmt.Errorf("获取最新 Fabric Loader 版本失败: %w", err)
-		}
-		config.LoaderVersion = stableLoader
+	var err error
+	config, err = resolveFabricTarget(config, FetchLatestFabricMinecraftVersion, FetchLatestStableFabricLoaderVersion)
+	if err != nil {
+		return err
 	}
 
 	baseDir := "."
@@ -72,6 +56,14 @@ func FabricB(config core.InstConfig, simpfun bool, mise bool) error {
 		return fmt.Errorf("解析库失败: %w", err)
 	}
 
+	for _, lib := range libs {
+		if lib.Skip {
+			continue
+		}
+		if _, err := workspace.SafeJoin(libsDir, lib.RelPath); err != nil {
+			return fmt.Errorf("Fabric 库路径无效: %w", err)
+		}
+	}
 	if err := os.MkdirAll(baseDir, 0o755); err != nil {
 		return fmt.Errorf("创建基础目录失败: %w", err)
 	}
@@ -101,6 +93,7 @@ func FabricB(config core.InstConfig, simpfun bool, mise bool) error {
 
 		target := filepath.Join(libsDir, filepath.FromSlash(lib.RelPath))
 		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			wg.Wait()
 			return fmt.Errorf("创建库目录失败: %w", err)
 		}
 		libraryFiles = append(libraryFiles, target)
@@ -151,6 +144,30 @@ func FabricB(config core.InstConfig, simpfun bool, mise bool) error {
 		return fmt.Errorf("生成启动脚本失败: %w", err)
 	}
 	return nil
+}
+
+func resolveFabricTarget(config core.InstConfig, latestMinecraft, latestLoader func(string, int) (string, error)) (core.InstConfig, error) {
+	if config.Version == "latest" {
+		version, err := latestMinecraft(config.Download, config.MaxRetries)
+		if err != nil {
+			return config, fmt.Errorf("获取最新我的世界版本失败: %w", err)
+		}
+		if version == "" {
+			return config, fmt.Errorf("版本清单缺少 latest.release")
+		}
+		config.Version = version
+	}
+	if config.LoaderVersion == "latest" {
+		version, err := latestLoader(config.Download, config.MaxRetries)
+		if err != nil {
+			return config, fmt.Errorf("获取最新 Fabric Loader 版本失败: %w", err)
+		}
+		if version == "" {
+			return config, fmt.Errorf("Fabric Loader 最新版本为空")
+		}
+		config.LoaderVersion = version
+	}
+	return config, nil
 }
 
 func FetchLatestFabricMinecraftVersion(downloadSource string, maxRetries int) (string, error) {
@@ -290,19 +307,6 @@ func libNameFromRaw(rl rawLibrary) string {
 		return v
 	}
 	return ""
-}
-
-func mavenRelPathFromName(name string) string {
-	parts := strings.Split(name, ":")
-	if len(parts) < 3 {
-		return name
-	}
-	group := parts[0]
-	artifact := parts[1]
-	version := parts[2]
-	jarName := artifact + "-" + version + ".jar"
-	groupPath := strings.ReplaceAll(group, ".", "/")
-	return filepath.ToSlash(filepath.Join(groupPath, artifact, version, jarName))
 }
 
 func extractLaunchMainClass(meta *metaResult) string {

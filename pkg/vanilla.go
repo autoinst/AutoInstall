@@ -1,6 +1,7 @@
 package pkg
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -8,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/autoinst/AutoInstall/core"
+	"github.com/autoinst/AutoInstall/internal/workspace"
 )
 
 func DownloadServerJar(version, loader, librariesDir string, downloadSource string, maxRetries int, serverJarPath string) error {
@@ -16,11 +18,25 @@ func DownloadServerJar(version, loader, librariesDir string, downloadSource stri
 		return err
 	}
 
+	root, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+	if filepath.IsAbs(serverPath) {
+		serverPath, err = filepath.Rel(root, serverPath)
+		if err != nil {
+			return err
+		}
+	}
+	serverPath, err = workspace.SafeJoin(root, serverPath)
+	if err != nil {
+		return err
+	}
 	if err := os.MkdirAll(filepath.Dir(serverPath), os.ModePerm); err != nil {
 		return fmt.Errorf("无法创建目录: %v", err)
 	}
 
-	officialURL, officialSHA1, err := getOfficialServerJarURL(version, maxRetries)
+	officialURL, officialSHA1, err := getOfficialServerJarURL(version, maxRetries, downloadSource)
 	if err != nil {
 		return fmt.Errorf("获取官方源失败: %v", err)
 	}
@@ -86,22 +102,39 @@ func serverJarFileName(version, loader string) string {
 }
 
 func downloadServerJarFromURL(url, serverPath, sha1 string, maxRetries int) error {
-	if err := core.DownloadFileRetry(url, serverPath, maxRetries); err != nil {
+	if info, err := os.Lstat(serverPath); err == nil {
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("服务端目标不是普通文件: %s", serverPath)
+		}
+		if sha1 != "" && core.VerifyFileHash(serverPath, "sha1", sha1) == nil {
+			return nil
+		}
+	} else if !os.IsNotExist(err) {
 		return err
 	}
-	if err := core.VerifyFileHash(serverPath, "sha1", sha1); err != nil {
-		_ = os.Remove(serverPath)
+	dir, err := os.MkdirTemp(filepath.Dir(serverPath), ".server-download-")
+	if err != nil {
 		return err
 	}
-	return nil
+	defer os.RemoveAll(dir)
+	staged := filepath.Join(dir, "server.jar")
+	if _, err = core.DownloadCandidates(context.Background(), core.HTTPClient, []string{url}, staged, maxRetries, map[string]string{"sha1": sha1}); err != nil {
+		return err
+	}
+	return os.Rename(staged, serverPath)
 }
 
 func compareMCVersion(a, b string) int {
 	return compareVersionTokens(a, b)
 }
 
-func getOfficialServerJarURL(version string, maxRetries int) (string, string, error) {
-	resp, err := core.GetWithRetry("https://launchermeta.mojang.com/mc/game/version_manifest.json", maxRetries)
+func getOfficialServerJarURL(version string, maxRetries int, sources ...string) (string, string, error) {
+	source := "official"
+	if len(sources) > 0 {
+		source = sources[0]
+	}
+	current, fallback := sourceURLPair("https://launchermeta.mojang.com/mc/game/version_manifest.json", "https://bmclapi2.bangbang93.com/mc/game/version_manifest.json", source)
+	resp, err := core.GetWithFallback(current, fallback, maxRetries)
 	if err != nil {
 		return "", "", err
 	}
@@ -130,7 +163,8 @@ func getOfficialServerJarURL(version string, maxRetries int) (string, string, er
 		return "", "", fmt.Errorf("未找到版本 %s", version)
 	}
 
-	resp2, err := core.GetWithRetry(versionURL, maxRetries)
+	current, fallback = sourceURLPair(versionURL, fmt.Sprintf("https://bmclapi2.bangbang93.com/version/%s/json", version), source)
+	resp2, err := core.GetWithFallback(current, fallback, maxRetries)
 	if err != nil {
 		return "", "", err
 	}

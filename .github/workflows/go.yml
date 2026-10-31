@@ -4,37 +4,81 @@ on:
   push:
     branches:
       - master
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.release.tag_name || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'release' }}
 
 jobs:
-  build:
-    strategy:
-      matrix:
-        goos: [ linux ]
-        goarch: [ amd64, 386 , arm64 , arm]
-        goamd64: [ v1 ]
-        exclude:
-          - goarch: 386
-            goos: dragonfly
-
+  test:
     runs-on: ubuntu-latest
-    env:
-      GOOS: ${{ matrix.goos }}
-      GOARCH: ${{ matrix.goarch }}
-      GOAMD64: ${{ matrix.goamd64 }}
-      CGO_ENABLED: 0
-      BUILD_NAME: AutoInstall-${{ matrix.goos }}-${{ matrix.goarch }}-${{ matrix.goamd64 }}${{ matrix.goos == 'windows' && '.exe' || '' }}
-
     steps:
       - uses: actions/checkout@v4
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: ^1.20
+          go-version-file: go.mod
+
+      - name: Test
+        run: go test ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Race test (Linux amd64)
+        env:
+          CGO_ENABLED: 1
+        run: go test -race ./...
+
+  build:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        goarch: [amd64, '386', arm64, arm]
+
+    runs-on: ubuntu-latest
+    env:
+      GOOS: linux
+      GOARCH: ${{ matrix.goarch }}
+      GOAMD64: v1
+      CGO_ENABLED: 0
+      BUILD_NAME: AutoInstall-linux-${{ matrix.goarch }}-v1
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve version from release tag
+        if: github.event_name == 'release'
+        id: version
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # 支持 v1.4.2、v1.4.2-14200、v1.1.5.2-11520。
+          if [[ ! "${TAG}" =~ ^v[0-9]+(\.[0-9]+){2,3}(-[0-9]+)?$ ]]; then
+            printf '::error::Invalid release tag: %s. Expected v1.4.2 or v1.4.2-14200.\n' "${TAG}"
+            exit 1
+          fi
+          VERSION="${TAG#v}"
+          printf 'version=%s\n' "${VERSION}" >> "${GITHUB_OUTPUT}"
+          printf 'Resolved version: %s\n' "${VERSION}"
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
 
       - name: Build
         env:
-          CF_API_KEY: ${{ secrets.CF_API_KEY }}
+          BUILD_VERSION: ${{ steps.version.outputs.version }}
         run: bash ./build.sh
 
       - name: Upload Build Artifact
@@ -42,3 +86,70 @@ jobs:
         with:
           name: ${{ env.BUILD_NAME }}
           path: dist/${{ env.BUILD_NAME }}
+          if-no-files-found: error
+
+  publish:
+    if: github.event_name == 'release'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ github.event.release.tag_name }}
+      GH_REPO: ${{ github.repository }}
+
+    steps:
+      - name: Checkout release history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download release binaries
+        uses: actions/download-artifact@v4
+        with:
+          pattern: AutoInstall-linux-*
+          path: dist
+          merge-multiple: true
+
+      - name: Generate checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          for arch in amd64 386 arm64 arm; do
+            test -s "dist/AutoInstall-linux-${arch}-v1"
+          done
+          (cd dist && sha256sum AutoInstall-linux-*-v1 > SHA256SUMS)
+
+      - name: Upload binaries to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release upload "${TAG}" dist/AutoInstall-linux-*-v1 dist/SHA256SUMS --clobber
+
+      - name: Backfill empty release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          BODY="$(gh release view "${TAG}" --json body --jq '.body // ""')"
+          if [ -n "$(printf '%s' "${BODY}" | tr -d '[:space:]')" ]; then
+            printf '%s\n' 'Release notes already have content; leaving them unchanged.'
+            exit 0
+          fi
+
+          PREV_TAG="$(git describe --tags --abbrev=0 "${TAG}^" 2>/dev/null || true)"
+          if [ -n "${PREV_TAG}" ]; then
+            NOTES="$(git log --pretty=format:'- %s' --no-merges "${PREV_TAG}..${TAG}")"
+          else
+            NOTES="$(git log --pretty=format:'- %s' --no-merges -50 "${TAG}")"
+          fi
+          if [ -z "${NOTES}" ]; then
+            NOTES='- 本次发布无提交变更'
+          fi
+
+          NOTES_FILE="${RUNNER_TEMP}/release_notes.md"
+          printf '%s\n' "${NOTES}" > "${NOTES_FILE}"
+          gh release edit "${TAG}" --notes-file "${NOTES_FILE}"

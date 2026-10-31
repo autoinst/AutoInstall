@@ -199,18 +199,18 @@
     {
         "file": "/inst.json",
         "name": "安装器配置",
-        "notice": "安装器基本配置，删除run.sh重启将重新安装。若有多个整合包(压缩包)modrinth则改名modpack.mrpack,spc生成的则modpack.zip",
+        "notice": "inst.json 可选；整合包目标来自包内声明，忽略此处的版本、加载器、加载器版本和下载源，只读取执行选项。整合包安装不改写此文件。覆盖包目标请用 --modpack 加目标参数；--no-modpack 强制普通安装。多个包请用 --modpack 指定。",
         "exps": [
             {
                 "type": "string",
                 "name": "我的世界版本",
-                "notice": "预计的我的世界版本，填写latest为最新版，若加载器为原版则为快照版",
+                "notice": "仅普通安装使用；可被 --mc-version 覆盖。latest 保留加载器各自的选择规则，原版会选择最新快照。",
                 "exp": "\"version\": \"(.*)\""
             },
             {
                 "type": "select",
                 "name": "加载器",
-                "notice": "选择需要的加载器，当我的世界版本为快照版时(Neo)Forge将不可用",
+                "notice": "仅普通安装使用；默认为原版。快照不能安装 (Neo)Forge；切换非原版加载器时也需明确加载器版本。",
                 "exp": "\"loader\": \"(forge|fabric|neoforge|vanilla)\"",
                 "options": [
                     {
@@ -234,34 +234,60 @@
             {
                 "type": "string",
                 "name": "加载器版本",
-                "notice": "修改加载器版本，填写latest为最新版，当加载器为原版则无效",
+                "notice": "仅普通安装使用；非原版加载器必须指定具体版本或 latest，原版不使用该字段。",
                 "exp": "\"loaderVersion\": \"(.*)\""
             },
             {
                 "type": "select",
                 "name": "文件下载源",
-                "notice": "非必要不要碰（镜像源可能会缺失刚更新的版本）",
-                "exp": "\"download\": \"(bmclapi|none)\"",
+                "notice": "默认 official；none 兼容 official。整合包模式忽略此项，请用 --download 选择源。镜像可能缺少刚发布的版本。",
+                "exp": "\"download\":\\s*\"(official|bmclapi|none)\"",
                 "options": [
                     {
                         "label": "BMCLAPI",
                         "value": "bmclapi"
                     },
                     {
-                        "label": "默认",
+                        "label": "官方源（默认）",
+                        "value": "official"
+                    },
+                    {
+                        "label": "官方源（旧 none 配置）",
                         "value": "none"
                     }
                 ]
             },
             {
                 "type": "string",
-                "name": "最大线程数",
-                "exp": "\"maxconnections\": ([0-9]+)"
+                "name": "最大并发下载数",
+                "notice": "默认 4，必须为正整数；整合包模式也生效，可被 --maxconnections 覆盖。",
+                "exp": "\"maxconnections\":\\s*([0-9]+)"
             },
             {
                 "type": "string",
-                "name": "自定义参数",
-                "exp": "\"argsment\": \"(.*)\""
+                "name": "每源最大尝试次数",
+                "notice": "默认 3，必须为正整数；包含首次尝试。",
+                "exp": "\"maxretries\":\\s*([0-9]+)"
+            },
+            {
+                "type": "string",
+                "name": "自定义 JVM 参数",
+                "notice": "默认空；整合包模式也生效。命令行 --argsment= 可显式清空配置值。",
+                "exp": "\"argsment\":\\s*\"(.*)\""
+            },
+            {
+                "type": "boolean",
+                "name": "跟随整合包模组文件名",
+                "notice": "默认 true；关闭时保留目录，按成功下载候选 URL 命名模组；非模组资源和 overrides 不改名。CLI 关闭语法：--follow-modpack-filenames=false。",
+                "exp": "\"followModpackFilenames\":\\s*(true|false)",
+                "rule": ["true", "false"]
+            },
+            {
+                "type": "boolean",
+                "name": "启用模组分类器",
+                "notice": "默认 true；关闭时跳过额外客户端模组检测及移动，但仍排除 Modrinth 明确不支持服务端的文件。不保证模组兼容。CLI 关闭语法：--mod-classifier=false。",
+                "exp": "\"enableModClassifier\":\\s*(true|false)",
+                "rule": ["true", "false"]
             }
         ]
     }

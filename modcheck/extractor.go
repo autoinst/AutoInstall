@@ -15,6 +15,16 @@ import (
 var tomlModIDPattern = regexp.MustCompile(`(?m)^\s*modId\s*=\s*"([^"]+)"`)
 
 func ExtractMods(modsDir string) ([]ModFile, error) {
+	info, err := os.Lstat(modsDir)
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		return nil, fmt.Errorf("模组目录不是普通目录: %s", modsDir)
+	}
 	entries, err := os.ReadDir(modsDir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -25,7 +35,7 @@ func ExtractMods(modsDir string) ([]ModFile, error) {
 
 	mods := make([]ModFile, 0, len(entries))
 	for _, entry := range entries {
-		if entry.IsDir() || !strings.EqualFold(filepath.Ext(entry.Name()), ".jar") {
+		if !entry.Type().IsRegular() || !strings.EqualFold(filepath.Ext(entry.Name()), ".jar") {
 			continue
 		}
 

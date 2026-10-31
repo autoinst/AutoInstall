@@ -12,21 +12,15 @@ import (
 	"time"
 )
 
-type DownloadError struct {
-	URL      string
-	Err      error
-	Response string
-}
-
 var (
-	LogFile        *os.File
-	DownloadErrors []DownloadError
-	ErrorMutex     sync.Mutex
-	logMutex       sync.Mutex
+	LogFile  *os.File
+	logMutex sync.Mutex
 )
 
-func SetupLogger() error {
-	logDir := filepath.Join(".autoinst", "logs")
+func SetupLogger() error { return SetupLoggerAt(".") }
+
+func SetupLoggerAt(root string) error {
+	logDir := filepath.Join(root, ".autoinst", "logs")
 	if err := os.MkdirAll(logDir, os.ModePerm); err != nil {
 		return err
 	}
@@ -139,33 +133,6 @@ func WriteLogRaw(msg string) {
 	logMutex.Lock()
 	defer logMutex.Unlock()
 	_, _ = LogFile.WriteString(msg)
-}
-
-func RecordError(url string, err error, response string) {
-	ErrorMutex.Lock()
-	DownloadErrors = append(DownloadErrors, DownloadError{
-		URL:      url,
-		Err:      err,
-		Response: response,
-	})
-	ErrorMutex.Unlock()
-
-	timestamp := time.Now().Format("2006-01-02 15:04:05")
-
-	_, file, _, ok := runtime.Caller(1)
-	source := "unknown"
-	if ok {
-		file = filepath.ToSlash(file)
-		if idx := strings.Index(file, "AutoInstall/"); idx != -1 {
-			source = file[idx+len("AutoInstall/"):]
-			source = strings.TrimSuffix(source, ".go")
-		} else {
-			source = filepath.Base(file)
-		}
-	}
-
-	msg := fmt.Sprintf("[%s][%s] Error downloading %s: %v | Response: %s\n", timestamp, source, url, err, response)
-	WriteLogRaw(msg)
 }
 
 func CloseLogger() {

@@ -1,134 +1,176 @@
 package pkg
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 
 	"github.com/autoinst/AutoInstall/core"
+	"github.com/autoinst/AutoInstall/internal/model"
+	"github.com/autoinst/AutoInstall/internal/workspace"
 )
 
-func Common(config core.InstConfig, cleaninst bool) error {
-	core.ApplyConfigDefaults(&config)
+type loaderInstaller func(core.InstConfig, bool, bool) error
 
-	javaPath, simpfun, mise := core.FindJava()
+// New loaders register here; their version and installation rules stay local.
+var loaderInstallers = map[string]loaderInstaller{
+	"forge": ForgeB, "neoforge": NeoForgeB, "fabric": FabricB, "vanilla": installVanilla,
+}
+
+func Install(ctx context.Context, req model.InstallRequest, clean bool) error {
+	wd, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+	root, err := filepath.Abs(req.Root)
+	if err != nil {
+		return err
+	}
+	if filepath.Clean(root) != filepath.Clean(wd) {
+		return fmt.Errorf("加载器安装目录必须是当前工作目录；请在目标目录运行 AutoInstall")
+	}
+	for _, rel := range []string{"libraries", "server.jar", "fabric-server-launch.jar", "run.sh"} {
+		if _, err := workspace.SafeJoin(root, rel); err != nil {
+			return err
+		}
+	}
+	cfg := core.InstConfig{Context: ctx, Version: req.Version, Loader: req.Loader, LoaderVersion: req.LoaderVersion, Download: req.Download, MaxConnections: req.MaxConnections, MaxRetries: req.MaxRetries, Argsment: req.Argsment}
+	return Common(cfg, clean)
+}
+
+func Common(cfg core.InstConfig, clean bool) error {
+	if cfg.Context != nil {
+		if err := cfg.Context.Err(); err != nil {
+			return err
+		}
+	}
+	core.ApplyConfigDefaults(&cfg)
+	var before map[string]bool
+	if clean {
+		var err error
+		before, err = cacheFiles()
+		if err != nil {
+			return err
+		}
+	}
+	java, simpfun, mise := core.FindJavaContext(cfg.Context)
+	if cfg.Context != nil && cfg.Context.Err() != nil {
+		return cfg.Context.Err()
+	}
 	if simpfun {
 		core.Log("已启用 simpfun 环境")
-		if mise {
-			core.Log("启用mise")
-		}
+	} else if java == "" {
+		return fmt.Errorf("未找到 Java，请确保已安装 Java 并设置 PATH")
 	} else {
-		if javaPath == "" {
-			return fmt.Errorf("未找到 Java，请确保已安装 Java 并设置 PATH")
-		}
-		core.Log("找到 Java 运行环境:", javaPath)
+		core.Log("找到 Java 运行环境:", java)
 	}
-
-	if config.Version != "latest" {
-		matched, _ := regexp.MatchString(`[a-zA-Z]`, config.Version)
-		if matched && (config.Loader == "neoforge" || config.Loader == "forge") {
-			return fmt.Errorf("安装器不支持安装(Neo)Forge快照/愚人节版本，请使用原版或 Fabric 加载器")
+	if cfg.Version != "latest" {
+		matched, _ := regexp.MatchString(`[a-zA-Z]`, cfg.Version)
+		if matched && (cfg.Loader == "forge" || cfg.Loader == "neoforge") {
+			return fmt.Errorf("安装器不支持 (Neo)Forge 快照/愚人节版本，请使用原版或 Fabric")
 		}
 	}
-
-	switch config.Loader {
-	case "neoforge":
-		if err := NeoForgeB(config, simpfun, mise); err != nil {
-			return err
-		}
-	case "forge":
-		if err := ForgeB(config, simpfun, mise); err != nil {
-			return err
-		}
-	case "fabric":
-		if err := FabricB(config, simpfun, mise); err != nil {
-			return err
-		}
-	case "vanilla":
-		if config.Version == "latest" {
-			latestSnapshot, err := FetchLatestVanillaVersion(config.Download, config.MaxRetries)
-			if err != nil {
-				return fmt.Errorf("获取最新 Minecraft 版本失败: %w", err)
-			}
-			config.Version = latestSnapshot
-		}
-
-		librariesDir := "./libraries"
-		if err := DownloadServerJar(config.Version, config.Loader, librariesDir, config.Download, config.MaxRetries, ""); err != nil {
-			return fmt.Errorf("下载 mc 服务端失败: %w", err)
-		}
-		core.Log("服务端下载完成")
-		if err := core.RunScript(config.Version, config.Loader, config.LoaderVersion, simpfun, mise, config.Argsment, ""); err != nil {
-			return fmt.Errorf("生成启动脚本失败: %w", err)
-		}
-	default:
-		return fmt.Errorf("未知加载器: %s", config.Loader)
+	install, ok := loaderInstallers[cfg.Loader]
+	if !ok {
+		return fmt.Errorf("未知加载器: %s", cfg.Loader)
 	}
-
-	if cleaninst {
-		core.Log("正在清理残留...")
-		_ = os.Remove("modrinth.index.json")
-		if err := os.Remove(".autoinst"); err != nil && !os.IsNotExist(err) {
-			core.Log("删除 .autoinst 文件失败:", err)
+	if err := install(cfg, simpfun, mise); err != nil {
+		return err
+	}
+	if clean {
+		after, err := cacheFiles()
+		if err != nil {
+			return err
 		}
-		files, err := os.ReadDir(".")
-		if err == nil {
-			for _, file := range files {
-				if !file.IsDir() && len(file.Name()) > 4 && file.Name()[len(file.Name())-4:] == ".log" {
-					if err := os.Remove(file.Name()); err != nil {
-						core.Log("删除日志文件失败:", file.Name(), err)
-					}
+		var errs []error
+		for path := range after {
+			if !before[path] {
+				if err = os.Remove(path); err != nil {
+					errs = append(errs, err)
 				}
 			}
-		} else {
-			core.Log("读取目录失败:", err)
 		}
-		core.Log("清理完成")
+		if err = errors.Join(errs...); err != nil {
+			return fmt.Errorf("清理本次缓存失败: %w", err)
+		}
+		core.Log("已清理本次新增缓存，保留用户输入、既有缓存及日志")
 	}
 	return nil
 }
 
-func FetchLatestVanillaVersion(downloadSource string, maxRetries int) (string, error) {
-	officialURL := "https://launchermeta.mojang.com/mc/game/version_manifest.json"
-	mirrorURL := "https://bmclapi2.bangbang93.com/mc/game/version_manifest.json"
-	currentURL, fallbackURL := sourceURLPair(officialURL, mirrorURL, downloadSource)
-
-	var result struct {
-		Latest struct {
-			Snapshot string `json:"snapshot"`
-		} `json:"latest"`
+func cacheFiles() (map[string]bool, error) {
+	result := make(map[string]bool)
+	root, err := workspace.SafeJoin(".", ".autoinst/cache")
+	if err != nil {
+		return nil, err
 	}
-	if err := getJSONWithFallback(currentURL, fallbackURL, maxRetries, &result); err != nil {
-		return "", err
+	entries, err := os.ReadDir(root)
+	if os.IsNotExist(err) {
+		return result, nil
 	}
-	return result.Latest.Snapshot, nil
+	if err != nil {
+		return nil, err
+	}
+	for _, entry := range entries {
+		if entry.Type().IsRegular() {
+			path, err := workspace.SafeJoin(root, entry.Name())
+			if err != nil {
+				return nil, err
+			}
+			result[path] = true
+		}
+	}
+	return result, nil
 }
 
-func fetchVersionManifest(downloadSource string, maxRetries int) (struct {
+func installVanilla(cfg core.InstConfig, simpfun, mise bool) error {
+	if cfg.Version == "latest" {
+		v, err := FetchLatestVanillaVersion(cfg.Download, cfg.MaxRetries)
+		if err != nil {
+			return err
+		}
+		cfg.Version = v
+	}
+	if err := DownloadServerJar(cfg.Version, cfg.Loader, "./libraries", cfg.Download, cfg.MaxRetries, ""); err != nil {
+		return err
+	}
+	return core.RunScript(cfg.Version, cfg.Loader, cfg.LoaderVersion, simpfun, mise, cfg.Argsment, "")
+}
+
+func FetchLatestVanillaVersion(source string, retries int) (string, error) {
+	manifest, err := fetchVersionManifest(source, retries)
+	if err != nil {
+		return "", err
+	}
+	if manifest.Latest.Snapshot == "" {
+		return "", fmt.Errorf("版本清单缺少 latest.snapshot")
+	}
+	return manifest.Latest.Snapshot, nil
+}
+
+func fetchVersionManifest(source string, retries int) (struct {
 	Latest struct {
 		Release  string `json:"release"`
 		Snapshot string `json:"snapshot"`
 	} `json:"latest"`
 }, error) {
-	officialURL := "https://launchermeta.mojang.com/mc/game/version_manifest.json"
-	mirrorURL := "https://bmclapi2.bangbang93.com/mc/game/version_manifest.json"
-	currentURL, fallbackURL := sourceURLPair(officialURL, mirrorURL, downloadSource)
-
 	var result struct {
 		Latest struct {
 			Release  string `json:"release"`
 			Snapshot string `json:"snapshot"`
 		} `json:"latest"`
 	}
-	if err := getJSONWithFallback(currentURL, fallbackURL, maxRetries, &result); err != nil {
-		return result, err
-	}
-	return result, nil
+	current, fallback := sourceURLPair("https://launchermeta.mojang.com/mc/game/version_manifest.json", "https://bmclapi2.bangbang93.com/mc/game/version_manifest.json", source)
+	err := getJSONWithFallback(current, fallback, retries, &result)
+	return result, err
 }
 
-func sourceURLPair(officialURL, mirrorURL, downloadSource string) (string, string) {
-	if downloadSource == "bmclapi" {
-		return mirrorURL, officialURL
+func sourceURLPair(official, mirror, source string) (string, string) {
+	if source == "bmclapi" {
+		return mirror, official
 	}
-	return officialURL, mirrorURL
+	return official, mirror
 }
